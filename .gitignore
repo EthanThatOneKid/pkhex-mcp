@@ -1,0 +1,4 @@
+.deno/
+dist/
+node_modules/
+*.local
