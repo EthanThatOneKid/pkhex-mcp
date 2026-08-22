@@ -25,6 +25,10 @@ The age of the newest Snapshot relative to the expected 500ms polling cadence; p
 The three-state freshness verdict applied identically everywhere — `live` (newest Snapshot age ≤ 2s), `stale` (2s–30s), `disconnected` (older than 30s, or none yet).
 _Avoid_: connection status, heartbeat
 
+**Bridge script**:
+The Sync producer — a Lua script (`bridge/platinum-sync.lua`) hosted by BizHawk's NDS core, reading Live State from emulated RAM and pushing Snapshots.
+_Avoid_: polling script, Lua hook, bot
+
 **Trainer Meta**:
 Identity and progress facts about the player — ID numbers, name, playtime, current location — carried alongside the Party in every Snapshot.
 _Avoid_: trainer info, profile
