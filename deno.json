@@ -1,5 +1,6 @@
 {
   "lock": true,
+  "version": "0.1.0",
   "nodeModulesDir": "auto",
   "tasks": {
     "dev": "deno run -A --watch src/main.ts",
@@ -7,7 +8,11 @@
     "check": "deno check src/ tests/",
     "lint": "deno lint",
     "fmt": "deno fmt",
-    "test": "deno test --allow-read --allow-run --allow-env"
+    "test": "deno test --allow-read --allow-run --allow-env",
+    "desktop": "deno desktop --hmr src/main.ts",
+    "build:win": "deno desktop --compress=xz --target x86_64-pc-windows-msvc",
+    "build:macos": "deno desktop --compress=xz --target aarch64-apple-darwin",
+    "build:linux": "deno desktop --compress=xz --target x86_64-unknown-linux-gnu"
   },
   "imports": {
     "hono": "npm:hono@^4",
@@ -22,6 +27,18 @@
   "lint": {
     "rules": {
       "exclude": ["no-explicit-any"]
+    }
+  },
+  "desktop": {
+    "app": {
+      "name": "pkhex-mcp",
+      "identifier": "com.ethanthatsomekid.pkhex-mcp"
+    },
+    "backend": "cef",
+    "output": {
+      "windows": "./dist/pkhex-mcp.msi",
+      "macos": "./dist/pkhex-mcp.dmg",
+      "linux": "./dist/pkhex-mcp.AppImage"
     }
   }
 }
