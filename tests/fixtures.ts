@@ -3,6 +3,12 @@ import type { SyncPayload } from "../src/gen4/schemas.ts";
 /** base64 of 236 zero bytes (316 chars with one pad) -- matches the frozen contract. */
 export const EMPTY_SLOT_BYTES = `${"A".repeat(315)}=`;
 
+export function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
 function emptySlot() {
   return { bytes: EMPTY_SLOT_BYTES, decryptedInPlace: false };
 }
