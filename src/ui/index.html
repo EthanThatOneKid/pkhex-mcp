@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pkhex-mcp Inspector</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="trainerbar">
+    <b id="trainer-name">--</b>
+    <span class="num" id="trainer-ids">TID ---- / SID ----</span>
+    <span class="num" id="trainer-playtime">--:-- played</span>
+    <span id="trainer-location">📍 --</span>
+    <span id="health">CONNECTING…</span>
+  </header>
+
+  <main class="grid" id="party-grid"></main>
+
+  <aside class="chatharness">
+    <h4>Ask your AI about this run</h4>
+    <p>Point any MCP client at the local server:</p>
+    <code class="snip" id="mcp-snip"></code>
+    <button class="copy" id="copy-snip">Copy snippet</button>
+  </aside>
+
+  <script src="/ui.js"></script>
+</body>
+</html>

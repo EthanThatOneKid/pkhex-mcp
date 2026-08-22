@@ -1,6 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { mountMcpHttp } from "./routes/mcp.ts";
+import indexHtml from "./ui/index.html" with { type: "text" };
+import uiJs from "./ui/ui.js" with { type: "text" };
+import stylesCss from "./ui/styles.css" with { type: "text" };
 import { GameStateSchema, SyncPayloadSchema } from "./gen4/schemas.ts";
 import type { GameState } from "./gen4/schemas.ts";
 import { GameStateStore } from "./state/game-state.ts";
@@ -147,6 +150,17 @@ export function createApp(options: AppOptions): OpenAPIHono {
   });
 
   app.openapi(integrityRoute, (c) => c.json(options.store.integrity(), 200));
+
+  // Inspector UI (ticket #17) -- text imports survive `deno desktop` compile.
+  app.get("/", (c) => c.html(indexHtml));
+  app.get("/ui.js", (c) => {
+    c.header("content-type", "text/javascript; charset=utf-8");
+    return c.body(uiJs);
+  });
+  app.get("/styles.css", (c) => {
+    c.header("content-type", "text/css; charset=utf-8");
+    return c.body(stylesCss);
+  });
 
   mountMcpHttp(app, options.store);
 
