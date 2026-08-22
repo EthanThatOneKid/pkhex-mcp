@@ -42,6 +42,10 @@ _Avoid_: team, roster
 **Party Member**:
 A single Pokémon occupying a Party slot, decoded from live RAM into structured form.
 
+**Torn read**:
+A Snapshot captured while the game was mid-write to a Party Member; caught by checksum validation and healed from last-known-good values.
+_Avoid_: bad read, corrupt slot
+
 **Gen IV**:
 The game family this tool targets; **Platinum** is the supported title for v0.1.
 _Avoid_: Sinnoh-era, DPPt
