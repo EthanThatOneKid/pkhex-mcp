@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
+import { mountMcpHttp } from "./routes/mcp.ts";
 import { GameStateSchema, SyncPayloadSchema } from "./gen4/schemas.ts";
 import type { GameState } from "./gen4/schemas.ts";
 import { GameStateStore } from "./state/game-state.ts";
@@ -146,6 +147,8 @@ export function createApp(options: AppOptions): OpenAPIHono {
   });
 
   app.openapi(integrityRoute, (c) => c.json(options.store.integrity(), 200));
+
+  mountMcpHttp(app, options.store);
 
   app.openapi(getStateRoute, (c) => {
     const snapshot = options.store.getGameState();
