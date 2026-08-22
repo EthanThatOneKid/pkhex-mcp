@@ -33,7 +33,7 @@ article.degraded { outline: 2px solid var(--degraded); }
 #health { margin-left: auto; font-weight: 700; letter-spacing: .06em; font-size: 12px; }
 .health-live { color: var(--hp); }
 .health-stale { color: #fbbf24; }
-.health-dead { color: #f87171; }
+.health-disconnected { color: #f87171; }
 
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px 18px; max-width: 1200px; }
 .card {

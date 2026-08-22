@@ -24,6 +24,13 @@ function syncStatus(gs: GameState | null): {
  * Data tools hard-error only before the first-ever Sync (spec section 8);
  * get_sync_status always answers.
  */
+
+const NO_SYNC = "no Sync received yet";
+
+function requireGame(gs: GameState | null): GameState {
+  if (gs === null) throw new Error(NO_SYNC);
+  return gs;
+}
 export function createMcpServer(store: GameStateStore): McpServer {
   const server = new McpServer({ name: "pkhex-mcp", version: "0.1.0" });
 
@@ -31,21 +38,17 @@ export function createMcpServer(store: GameStateStore): McpServer {
     "get_party",
     "The player's Party: six slots of decoded Party Members (null when empty).",
     {},
-    async () => {
-      const gs = store.getGameState();
-      if (gs === null) return text("no Sync received yet", true);
-      return text(JSON.stringify(gs.slots));
+    () => {
+      return text(JSON.stringify(requireGame(store.getGameState()).slots));
     },
   );
 
   server.tool(
     "get_game_state",
-    "Full Live State: trainer meta, sync health, and the whole Party.",
+    "Full Live State: Trainer Meta, Sync health, and the whole Party.",
     {},
-    async () => {
-      const gs = store.getGameState();
-      if (gs === null) return text("no Sync received yet", true);
-      return text(JSON.stringify(gs));
+    () => {
+      return text(JSON.stringify(requireGame(store.getGameState())));
     },
   );
 
@@ -53,16 +56,15 @@ export function createMcpServer(store: GameStateStore): McpServer {
     "get_sync_status",
     "Sync health verdict: live/stale/disconnected plus Snapshot age.",
     {},
-    async () => text(JSON.stringify(syncStatus(store.getGameState()))),
+    () => text(JSON.stringify(syncStatus(store.getGameState()))),
   );
 
   server.tool(
     "get_pokemon_by_slot",
     "One Party Member by slot number (1..6); null when the slot is empty.",
     { slot: z.number().int().min(1).max(6) },
-    async ({ slot }: { slot: number }) => {
-      const gs = store.getGameState();
-      if (gs === null) return text("no Sync received yet", true);
+    ({ slot }: { slot: number }) => {
+      const gs = requireGame(store.getGameState());
       return text(JSON.stringify(gs.slots[slot - 1] ?? null));
     },
   );
@@ -71,9 +73,8 @@ export function createMcpServer(store: GameStateStore): McpServer {
     "find_party_member_by_species",
     "First Party Member matching a species id or display name; null when absent.",
     { nameOrId: z.union([z.string(), z.number()]) },
-    async ({ nameOrId }: { nameOrId: string | number }) => {
-      const gs = store.getGameState();
-      if (gs === null) return text("no Sync received yet", true);
+    ({ nameOrId }: { nameOrId: string | number }) => {
+      const gs = requireGame(store.getGameState());
       const wanted = typeof nameOrId === "number"
         ? nameOrId
         : nameOrId.trim().toLowerCase();

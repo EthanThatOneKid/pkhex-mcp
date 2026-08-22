@@ -60,8 +60,7 @@ function render(state) {
     health.textContent = `● STALE · ${Math.round(state.sync.ageMs / 1000)}s`;
     health.classList.add("health-stale");
   } else {
-    health.textContent = "● DISCONNECTED — start your emulator with the bridge script running";
-    health.classList.add("health-dead");
+    renderDisconnected(health);
   }
 
   // Party cards
@@ -92,17 +91,18 @@ function render(state) {
           : `<span><b>${mv.moveName}</b><i class="num">${mv.ppCur}/${mv.ppMax}</i></span>`
       )
       .join("");
-    const statRow = [
-      ["ATK", member.stats.attack],
-      ["DEF", member.stats.defense],
-      ["SPA", member.stats.spAttack],
-      ["SPD", member.stats.spDefense],
-      ["SPE", member.stats.speed],
-    ]
-      .map(
-        ([k, v]) =>
-          `<div><b class="${flashIf(prev?.stats?.[k.toLowerCase()] !== v)} ${k === "ATK" ? "" : ""}">${v}</b>${k}</div>`
-      )
+    const statKeys = [
+      ["ATK", "attack"],
+      ["DEF", "defense"],
+      ["SPA", "spAttack"],
+      ["SPD", "spDefense"],
+      ["SPE", "speed"],
+    ];
+    const statRow = statKeys
+      .map(([label, key]) => {
+        const changed = prev?.stats?.[key] !== member.stats[key];
+        return `<div><b class="${flashIf(changed)}">${member.stats[key]}</b>${label}</div>`;
+      })
       .join("");
 
     card.innerHTML = `
@@ -138,11 +138,10 @@ async function pollOnce() {
   }
 }
 
-function renderDisconnected() {
-  const health = $("health");
-  health.className = "";
-  health.textContent = "● DISCONNECTED — start your emulator with the bridge script running";
-  health.classList.add("health-dead");
+function renderDisconnected(healthEl = $("health")) {
+  healthEl.className = "";
+  healthEl.textContent = "● DISCONNECTED — start your emulator with the bridge script running";
+  healthEl.classList.add("health-disconnected");
 }
 
 async function pollIntegrity() {

@@ -58,6 +58,8 @@ async function handshake(app: ReturnType<typeof createApp>): Promise<string> {
     clientInfo: { name: "test-client", version: "0" },
   }));
   assertEquals(init.status, 200);
+  const initDoc = await jsonBody(init);
+  assertEquals(initDoc.result?.serverInfo?.name, "pkhex-mcp");
   const sessionId = init.headers.get("mcp-session-id");
   assertExists(sessionId);
   

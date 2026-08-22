@@ -68,31 +68,31 @@ end
 
 --- Base64 (RFC 4648) over a table of byte values.
 local B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+local function b64_sextets(triple)
+    local c1 = B64_ALPHABET:sub(math.floor(triple / 262144) % 64 + 1, math.floor(triple / 262144) % 64 + 1)
+    local c2 = B64_ALPHABET:sub(math.floor(triple / 4096) % 64 + 1, math.floor(triple / 4096) % 64 + 1)
+    local c3 = B64_ALPHABET:sub(math.floor(triple / 64) % 64 + 1, math.floor(triple / 64) % 64 + 1)
+    local c4 = B64_ALPHABET:sub(triple % 64 + 1, triple % 64 + 1)
+    return c1, c2, c3, c4
+end
+
 local function base64_encode(bytes)
     local out = {}
     local n = #bytes
     for i = 1, n - 2, 3 do
-        local a, b, c = bytes[i], bytes[i + 1], bytes[i + 2]
-        local triple = a * 65536 + b * 256 + c
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 262144) % 64 + 1, math.floor(triple / 262144) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 4096) % 64 + 1, math.floor(triple / 4096) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 64) % 64 + 1, math.floor(triple / 64) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(triple % 64 + 1, triple % 64 + 1)
+        local triple = bytes[i] * 65536 + bytes[i + 1] * 256 + bytes[i + 2]
+        local c1, c2, c3, c4 = b64_sextets(triple)
+        out[#out + 1] = c1 .. c2 .. c3 .. c4
     end
     local rem = n % 3
     if rem == 1 then
-        local a = bytes[n]
-        local triple = a * 65536
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 262144) % 64 + 1, math.floor(triple / 262144) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 4096) % 64 + 1, math.floor(triple / 4096) % 64 + 1)
-        out[#out + 1] = "=="
+        local c1, c2, _, _ = b64_sextets(bytes[n] * 65536)
+        out[#out + 1] = c1 .. c2 .. "=="
     elseif rem == 2 then
-        local a, b = bytes[n - 1], bytes[n]
-        local triple = a * 65536 + b * 256
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 262144) % 64 + 1, math.floor(triple / 262144) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 4096) % 64 + 1, math.floor(triple / 4096) % 64 + 1)
-        out[#out + 1] = B64_ALPHABET:sub(math.floor(triple / 64) % 64 + 1, math.floor(triple / 64) % 64 + 1)
-        out[#out + 1] = "="
+        local triple = bytes[n - 1] * 65536 + bytes[n] * 256
+        local c1, c2, c3, _ = b64_sextets(triple)
+        out[#out + 1] = c1 .. c2 .. c3 .. "="
     end
     return table.concat(out)
 end
@@ -101,9 +101,7 @@ end
 local function urlencode(value)
     local out = {}
     for i = 1, #value do
-        local ch = value:sub(i, i + 1 - i):byte(1) or 0
         local byte = value:byte(i)
-        ch = nil
         if (byte >= 48 and byte <= 57)       -- 0-9
             or (byte >= 65 and byte <= 90)   -- A-Z
             or (byte >= 97 and byte <= 122)  -- a-z
@@ -167,11 +165,12 @@ local function build_snapshot_json()
     for slotIndex = 0, 5 do
         if slotIndex < partyCount then
             local slotBase = p1 + PARTY_BASE_OFF + SLOT_STRIDE * slotIndex
-            local bytes, attempt, pidBefore, pidAfter
-            for attemptIndex = 1, 3 do
-                attempt = try_read_bytes(slotBase, SLOT_STRIDE)
+            -- Torn-read protocol (research doc): bracket the kept copy with
+            -- PID reads; retry until the PID is stable across the copy.
+            local attempt, pidBefore, pidAfter
+            for _ = 1, 3 do
                 pidBefore = memory.read_u32_le(slotBase, "Main RAM")
-                bytes = try_read_bytes(slotBase, SLOT_STRIDE)
+                attempt = try_read_bytes(slotBase, SLOT_STRIDE)
                 pidAfter = memory.read_u32_le(slotBase, "Main RAM")
                 if attempt ~= nil and pidBefore == pidAfter then break end
             end

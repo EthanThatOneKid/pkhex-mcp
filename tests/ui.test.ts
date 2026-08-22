@@ -15,7 +15,7 @@ Deno.test("GET / serves the Inspector shell", async () => {
   assertStringIncludes(html, "styles.css");
 });
 
-Deno.test("GET /ui.js serves the polling script", async () => {
+Deno.test("GET /ui.js serves the Inspector client", async () => {
   const res = await createApp({ store: new GameStateStore() }).request("/ui.js", {
     headers: { ...HOST },
   });
