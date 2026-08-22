@@ -55,6 +55,19 @@ export function decodePartySlot(
   }
   if (slotBytes.length !== SLOT_SIZE) return { status: "torn" };
 
+  // A fully zeroed slot is a VACATED slot: the Bridge script normalizes
+  // slots beyond the live party count (count byte @P1+0xD090) to zeros.
+  // Checked before decryption because XORing zeros would break the Add16
+  // gate and misreport emptiness as torn.
+  let allZero = true;
+  for (const b of slotBytes) {
+    if (b !== 0) {
+      allZero = false;
+      break;
+    }
+  }
+  if (allZero) return { status: "empty" };
+
   const image = decryptSlot(slotBytes, raw.decryptedInPlace);
   const dv = new DataView(image.buffer);
 

@@ -1,6 +1,9 @@
+import { decodePartySlot } from "../gen4/deserialize.ts";
+import { PARTY_SIZE } from "../gen4/schemas.ts";
 import type {
   EnrichedTrainerMeta,
   GameState,
+  PartyMember,
   SyncPayload,
 } from "../gen4/schemas.ts";
 
@@ -16,9 +19,11 @@ export function computeSyncState(ageMs: number): SyncStateName {
   return "disconnected";
 }
 
-interface Snapshot {
-  payload: SyncPayload;
-  receivedAtMs: number;
+export interface IntegrityStats {
+  /** Total Torn reads ever collapsed to last-known-good. */
+  tornEvents: number;
+  /** Party slots that were torn in the most recent Sync (1..6). */
+  lastSyncTornSlots: number[];
 }
 
 export interface GameStateStoreOptions {
@@ -26,12 +31,24 @@ export interface GameStateStoreOptions {
   now?: () => number;
 }
 
+const EMPTY_SLOTS: readonly (PartyMember | null)[] = Array.from(
+  { length: PARTY_SIZE },
+  () => null,
+);
+
 /**
- * Memory-only holder of the newest Snapshot (spec section 8).
+ * Memory-only holder of the newest decoded Snapshot (spec section 8).
  * Every valid Sync is an idempotent full-replace; no persistence.
+ *
+ * Torn-read self-heal: a slot whose decode fails keeps its last-known-good
+ * member; degradations are counted for the debug surface only.
  */
 export class GameStateStore {
-  #snapshot: Snapshot | null = null;
+  #trainerMeta: EnrichedTrainerMeta | null = null;
+  #slots: (PartyMember | null)[] = [...EMPTY_SLOTS];
+  #receivedAtMs: number | null = null;
+  #tornEvents = 0;
+  #lastSyncTornSlots: number[] = [];
   readonly #now: () => number;
 
   constructor(options: GameStateStoreOptions = {}) {
@@ -39,25 +56,45 @@ export class GameStateStore {
   }
 
   recordSync(payload: SyncPayload): void {
-    this.#snapshot = { payload, receivedAtMs: this.#now() };
+    const receivedAtMs = this.#now();
+    const nextSlots: (PartyMember | null)[] = [];
+    const tornSlots: number[] = [];
+
+    for (let i = 0; i < PARTY_SIZE; i++) {
+      const result = decodePartySlot(i + 1, payload.slots[i]!);
+      if (result.status === "ok") nextSlots.push(result.member);
+      else if (result.status === "empty") nextSlots.push(null);
+      else {
+        // Torn read: keep serving last-known-good for this slot.
+        nextSlots.push(this.#slots[i]!);
+        tornSlots.push(i + 1);
+      }
+    }
+
+    this.#slots = nextSlots;
+    this.#trainerMeta = { ...payload.trainerMeta, locationName: null };
+    this.#receivedAtMs = receivedAtMs;
+    this.#tornEvents += tornSlots.length;
+    this.#lastSyncTornSlots = tornSlots;
   }
 
   /** Contract-shaped GameState, or null before the first-ever Sync. */
   getGameState(): GameState | null {
-    const snap = this.#snapshot;
-    if (snap === null) return null;
-    const ageMs = Math.max(0, this.#now() - snap.receivedAtMs);
+    if (this.#receivedAtMs === null || this.#trainerMeta === null) return null;
+    const ageMs = Math.max(0, this.#now() - this.#receivedAtMs);
     return {
-      receivedAt: new Date(snap.receivedAtMs).toISOString(),
+      receivedAt: new Date(this.#receivedAtMs).toISOString(),
       sync: { state: computeSyncState(ageMs), ageMs },
-      // Decoder + enrichment tables land with the decoder ticket; until then
-      // Party slots are unknown and location names unresolved.
-      slots: [null, null, null, null, null, null],
-      trainerMeta: enrichTrainerMeta(snap.payload.trainerMeta),
+      trainerMeta: this.#trainerMeta,
+      slots: this.#slots.slice(0, PARTY_SIZE) as GameState["slots"],
     };
   }
-}
 
-function enrichTrainerMeta(meta: SyncPayload["trainerMeta"]): EnrichedTrainerMeta {
-  return { ...meta, locationName: null };
+  /** Degradation counters -- debug surface only, never MCP vocabulary. */
+  integrity(): IntegrityStats {
+    return {
+      tornEvents: this.#tornEvents,
+      lastSyncTornSlots: [...this.#lastSyncTornSlots],
+    };
+  }
 }

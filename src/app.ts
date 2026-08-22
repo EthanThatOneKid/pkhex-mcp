@@ -44,19 +44,36 @@ const postSyncRoute = createRoute({
   path: "/sync",
   tags: ["sync"],
   summary: "Record a Snapshot pushed by the Bridge script (a Sync)",
-  request: {
-    body: {
-      content: { "application/json": { schema: SyncPayloadSchema } },
-      description:
-        "Canonical SyncPayload JSON. The Bridge script sends this string as one form field.",
-      required: true,
-    },
-  },
+  // NOTE: body parsing is manual (handler below) -- @hono/zod-openapi's
+  // built-in validator cannot express "urlencoded field containing JSON".
+  // Canonical shape: application/json SyncPayload; the Bridge script sends
+  // the same JSON as one application/x-www-form-urlencoded `snapshot` field.
   responses: {
     204: { description: "Snapshot accepted (full-replace)" },
     400: {
       content: { "application/json": { schema: errorSchema } },
-      description: "Malformed SyncPayload",
+      description:
+        "Malformed SyncPayload (bad JSON, schema mismatch, missing field)",
+    },
+  },
+});
+
+const integrityRoute = createRoute({
+  method: "get",
+  path: "/debug/sync-integrity",
+  tags: ["debug"],
+  summary: "Torn-read degradation counters (debug surface)",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            tornEvents: z.number().int().min(0),
+            lastSyncTornSlots: z.array(z.number().int().min(1).max(6)),
+          }),
+        },
+      },
+      description: "Degradation counters; never part of MCP vocabulary",
     },
   },
 });
@@ -94,10 +111,41 @@ export function createApp(options: AppOptions): OpenAPIHono {
     await next();
   });
 
-  app.openapi(postSyncRoute, (c) => {
-    options.store.recordSync(c.req.valid("json"));
+  app.openapi(postSyncRoute, async (c) => {
+    const contentType = c.req.header("content-type") ?? "";
+    let rawText: string;
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      let form: Record<string, unknown>;
+      try {
+        form = await c.req.parseBody();
+      } catch {
+        return c.json({ error: "malformed form encoding" }, 400);
+      }
+      const field = form["snapshot"];
+      if (typeof field !== "string") {
+        return c.json({ error: "missing snapshot field" }, 400);
+      }
+      rawText = field;
+    } else {
+      rawText = await c.req.text();
+    }
+
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(rawText);
+    } catch {
+      return c.json({ error: "snapshot is not valid JSON" }, 400);
+    }
+    const parsed = SyncPayloadSchema.safeParse(candidate);
+    if (!parsed.success) {
+      return c.json({ error: "malformed SyncPayload" }, 400);
+    }
+
+    options.store.recordSync(parsed.data);
     return c.body(null, 204);
   });
+
+  app.openapi(integrityRoute, (c) => c.json(options.store.integrity(), 200));
 
   app.openapi(getStateRoute, (c) => {
     const snapshot = options.store.getGameState();
@@ -105,6 +153,35 @@ export function createApp(options: AppOptions): OpenAPIHono {
       return c.json({ error: "no Sync received yet" }, 503);
     }
     return c.json(snapshot satisfies GameState, 200);
+  });
+
+  // The /sync body contract is parsed manually (see NOTE above); surface it
+  // in the OpenAPI document here so the debug UI stays truthful.
+  app.use("/doc", async (c, next) => {
+    await next();
+    if (c.res.status === 200 && c.req.method === "GET") {
+      const spec = await c.res.json();
+      spec.paths["/sync"].post.requestBody = {
+        required: true,
+        description:
+          "Canonical: application/json SyncPayload. The Bridge script sends the same JSON as one application/x-www-form-urlencoded field named 'snapshot'. Shape: see components.GameState slots/trainerMeta (SyncPayload is the wire-truth twin).",
+        content: {
+          "application/json": { schema: { $ref: "#/components/schemas/SyncPayload" } },
+          "application/x-www-form-urlencoded": {
+            schema: {
+              type: "object",
+              properties: {
+                snapshot: { type: "string", description: "SyncPayload JSON string" },
+              },
+              required: ["snapshot"],
+            },
+          },
+        },
+      };
+      c.res = c.newResponse(JSON.stringify(spec), 200, {
+        "content-type": "application/json",
+      });
+    }
   });
 
   app.doc31("/doc", {

@@ -5,6 +5,9 @@ import { z } from "@hono/zod-openapi";
  * Spec: docs/spec/v0.1.md section 5.
  */
 
+/** Party size is fixed by the games (six slots). */
+export const PARTY_SIZE = 6;
+
 export const PlaytimeSchema = z
   .object({
     hours: z.number().int().min(0),
