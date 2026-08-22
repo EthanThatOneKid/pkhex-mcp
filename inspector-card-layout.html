@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE — pkhex-mcp Inspector card layout</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#181b23; --panel2:#1e222c; --line:#2a2f3b;
+    --text:#e6e9ef; --dim:#8b93a5; --hp:#4ade80; --atk:#f87171;
+    --chip:#303748; --accent:#7aa2ff; --flash:#ffd76a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,sans-serif;padding-bottom:84px}
+  .proto-banner{position:fixed;top:10px;left:10px;z-index:50;background:#b91c1c;color:#fff;font-weight:600;
+    font-size:11px;letter-spacing:.08em;padding:4px 10px;border-radius:6px;text-transform:uppercase}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  @keyframes flashbg{0%{background:var(--flash);color:#111}100%{background:transparent}}
+  .flash{animation:flashbg 1.2s ease-out;border-radius:4px}
+
+  /* ---------- shared bits ---------- */
+  .type{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;padding:1px 7px;border-radius:99px;color:#0b0d12}
+  .t-fire{background:#f87171}.t-flying{background:#93c5fd}.t-normal{background:#d1d5db}
+  .t-electric{background:#fde047}.t-water{background:#60a5fa}.t-grass{background:#86efac}
+  .t-poison{background:#c084fc}.t-ground{background:#fbbf24}.t-dragon{background:#a78bfa}
+  .t-rock{background:#d6b98c}.t-fighting{background:#fb923c}.t-dark{background:#9ca3af}.t-ice{background:#a5f3fc}
+  .status-chip{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px}
+  .s-par{background:#fde047;color:#111}.s-psn{background:#c084fc;color:#111}.s-brn{background:#fb923c;color:#111}
+  .hpbar{height:6px;background:#2a2f3b;border-radius:3px;overflow:hidden}
+  .hpbar>i{display:block;height:100%;background:var(--hp)}
+  .hpbar.mid>i{background:#fbbf24}.hpbar.low>i{background:#f87171}
+
+  /* ---------- Variant A : card grid ---------- */
+  #vA header.trainerbar{display:flex;gap:22px;align-items:center;background:var(--panel);border-bottom:1px solid var(--line);
+    padding:10px 18px;font-size:13px}
+  #vA header.trainerbar b{font-size:15px}
+  #vA header.trainerbar .live{color:var(--hp);font-size:11px;font-weight:700;letter-spacing:.06em;margin-left:auto}
+  #vA .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px 18px}
+  #vA article.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+  #vA .card .top{display:flex;align-items:baseline;gap:8px}
+  #vA .card .top .name{font-weight:700;font-size:15px}
+  #vA .card .top .lv{color:var(--dim);font-size:12px;margin-left:auto}
+  #vA .card .types{display:flex;gap:4px}
+  #vA .card .hpline{display:flex;align-items:center;gap:8px;font-size:12px}
+  #vA .card .hpline .hpbar{flex:1}
+  #vA .card .meta{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim);flex-wrap:wrap}
+  #vA .card .meta .item{color:#fbbf24}
+  #vA .moves{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:12px}
+  #vA .moves span b{font-weight:500}
+  #vA .moves span i{color:var(--dim);font-style:normal;margin-left:6px}
+  #vA .stats{display:flex;gap:0;border-top:1px dashed var(--line);padding-top:7px;font-size:11px;color:var(--dim)}
+  #vA .stats div{flex:1;text-align:center}
+  #vA .stats b{display:block;color:var(--text);font-size:13px}
+
+  /* ---------- Variant B : roster rows ---------- */
+  #vB .slimbar{display:flex;gap:18px;align-items:center;padding:8px 18px;background:var(--panel);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+  #vB .slimbar b{color:var(--text)}
+  #vB ul.roster{list-style:none;margin:0;padding:8px 12px;display:flex;flex-direction:column;gap:6px}
+  #vB li.row{display:grid;grid-template-columns:minmax(150px,220px) minmax(120px,1.2fr) 64px 110px minmax(180px,1.6fr);
+    gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  #vB .row .who{display:flex;flex-direction:column;min-width:0}
+  #vB .row .who .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #vB .row .who .sub{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #vB .row .hpwrap{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dim)}
+  #vB .row .st{text-align:center}
+  #vB .row .it{font-size:12px;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #vB .row .mv{font-size:11.5px;color:var(--dim);display:flex;flex-wrap:wrap;gap:2px 10px;min-width:0}
+  #vB .row .mv b{color:var(--text);font-weight:500}
+  #vB .chatdock{position:fixed;right:14px;top:64px;width:270px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:12px;font-size:12px}
+  #vB .chatdock h4,#vC aside h4,.chath h4{margin:0 0 6px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+  #vB .chatdock p,.chath p{margin:0 0 8px;color:var(--dim)}
+  code.snip{display:block;background:#0b0d12;border:1px solid var(--line);border-radius:6px;padding:7px 8px;
+    font:11px/1.5 Consolas,monospace;color:#9ecbff;word-break:break-all;margin-bottom:7px}
+  button.copy{background:var(--chip);color:var(--text);border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer}
+  button.copy:hover{background:#3a4256}
+
+  /* ---------- Variant C : spotlight ---------- */
+  #vC .shell{display:grid;grid-template-columns:230px 1fr 280px;height:calc(100vh - 84px)}
+  #vC .rail{background:var(--panel);border-right:1px solid var(--line);overflow:auto}
+  #vC .trainermini{padding:12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+  #vC .trainermini b{display:block;color:var(--text);font-size:14px}
+  #vC .rail ul{list-style:none;margin:0;padding:6px}
+  #vC .rail li{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer}
+  #vC .rail li:hover{background:var(--panel2)}
+  #vC .rail li.sel{background:#26304a;outline:1px solid var(--accent)}
+  #vC .rail .nm{font-weight:600;font-size:13px}
+  #vC .rail .sub{font-size:10.5px;color:var(--dim)}
+  #vC .rail .hpbar{width:44px}
+  #vC main.detail{padding:20px 26px;overflow:auto}
+  #vC main.detail h2{margin:0;display:flex;align-items:center;gap:10px;font-size:24px}
+  #vC main.detail .lvtag{font-size:14px;color:var(--dim)}
+  #vC .bigstats{display:flex;gap:10px;margin:16px 0}
+  #vC .bigstats div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:74px;text-align:center}
+  #vC .bigstats b{font-size:19px;display:block}
+  #vC .bigstats span{font-size:10px;color:var(--dim);letter-spacing:.06em}
+  #vC .kv{display:grid;grid-template-columns:repeat(2,minmax(140px,max-content));gap:6px 26px;margin:12px 0 18px;font-size:13px}
+  #vC .kv dt{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  #vC .movelist{display:flex;flex-direction:column;gap:7px;max-width:430px}
+  #vC .movelist .m{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:13px}
+  #vC .movelist .m i{font-style:normal;color:var(--dim);margin-left:auto;font-size:12px}
+  #vC aside{background:var(--panel);border-left:1px solid var(--line);padding:14px;font-size:12px;overflow:auto}
+
+  /* ---------- floating switcher ---------- */
+  #switcher{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;
+    background:#000c;border:1px solid #ffffff33;border-radius:999px;padding:7px 10px;box-shadow:0 6px 24px #000a}
+  #switcher button{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:2px 8px}
+  #switcher .label{color:#fff;font-size:12.5px;min-width:190px;text-align:center;font-weight:600}
+  #switcher .label small{display:block;font-weight:400;color:#bbb;font-size:10.5px}
+</style>
+</head>
+<body>
+<div class="proto-banner">Prototype — throwaway</div>
+
+<!-- ================= VARIANT A — CARD GRID ================= -->
+<div id="vA" class="variant">
+  <header class="trainerbar">
+    <b>ETHAN</b><span class="num">TID <span class="tid">12345</span> / SID <span class="sid">54321</span></span>
+    <span class="playtime num">87:14 played</span><span class="loc">📍 Route 216</span>
+    <span class="live">● LIVE</span>
+  </header>
+  <div class="grid" id="gridA"></div>
+</div>
+
+<!-- ================= VARIANT B — ROSTER ROWS ================= -->
+<div id="vB" class="variant" hidden>
+  <div class="slimbar">
+    <b>ETHAN</b> <span class="num">12345/54321</span> · <span class="num">87:14</span> · 📍 Route 216 · <span style="color:var(--hp)">● live</span>
+  </div>
+  <ul class="roster" id="rosterB"></ul>
+  <div class="chatdock chath">
+    <h4>Ask your AI about this run</h4>
+    <p>Point any MCP client at the local server:</p>
+    <code class="snip" id="snipB"></code>
+    <button class="copy" data-copy="snipB">Copy snippet</button>
+  </div>
+</div>
+
+<!-- ================= VARIANT C — SPOTLIGHT ================= -->
+<div id="vC" class="variant" hidden>
+  <div class="shell">
+    <nav class="rail">
+      <div class="trainermini"><b>ETHAN</b>TID/SID <span class="num tid">12345</span>/<span class="num sid">54321</span><br>
+        <span class="num playtime">87:14</span> · Route 216</div>
+      <ul id="railList"></ul>
+    </nav>
+    <main class="detail" id="detailPane"></main>
+    <aside class="chath">
+      <h4>Ask your AI about this run</h4>
+      <p>Point any MCP client at the local server:</p>
+      <code class="snip" id="snipC"></code>
+      <button class="copy" data-copy="snipC">Copy snippet</button>
+    </aside>
+  </div>
+</div>
+
+<!-- ================= floating switcher ================= -->
+<div id="switcher">
+  <button id="prevV" title="Previous (←)">◀</button>
+  <div class="label"><span id="vkey">A — Card grid</span><small>?variant=A · ←/→ keys cycle</small></div>
+  <button id="nextV" title="Next (→)">▶</button>
+</div>
+
+<script>
+"use strict";
+// ---- synthetic party (Platinum-flavored, no copyrighted assets) ----
+const PARTY=[
+ {name:"Infernape",lv:64,types:["fire","fighting"],nature:"Naive",item:"Life Orb",ability:"Blaze",
+  hp:187,max:187,st:{Atk:142,Def:94,SpA:139,SpD:96,Spe:151},
+  moves:[["Flare Blitz",9,15],["Close Combat",6,24],["Thunder Punch",12,15],["Mach Punch",20,20]],status:null},
+ {name:"Staraptor",lv:63,types:["normal","flying"],nature:"Adamant",item:"Choice Band",ability:"Intimidate",
+  hp:193,max:193,st:{Atk:148,Def:92,SpA:78,SpD:88,Spe:124},
+  moves:[["Brave Bird",11,15],["Return",22,25],["Close Combat",7,24],["U-turn",14,20]],status:null},
+ {name:"Luxray",lv:62,types:["electric"],nature:"Lonely",item:"Magnet",ability:"Intimidate",
+  hp:172,max:172,st:{Atk:145,Def:90,SpA:112,SpD:88,Spe:105},
+  moves:[["Thunder Fang",14,15],["Crunch",10,15],["Spark",17,20],["Strength",13,20]],status:"PAR"},
+ {name:"Floatzel",lv:62,types:["water"],nature:"Jolly",item:"Mystic Water",ability:"Swift Swim",
+  hp:166,max:166,st:{Atk:129,Def:82,SpA:96,SpD:80,Spe:148},
+  moves:[["Surf",9,15],["Ice Punch",11,15],["Crunch",13,15],["Aqua Jet",21,20]],status:null},
+ {name:"Roserade",lv:62,types:["grass","poison"],nature:"Modest",item:"Black Sludge",ability:"Natural Cure",
+  hp:154,max:154,st:{Atk:81,Def:89,SpA:141,SpD:109,Spe:106},
+  moves:[["Energy Ball",10,15],["Sludge Bomb",9,15],["Shadow Ball",12,15],["Synthesis",4,10]],status:"PSN"},
+ {name:"Garchomp",lv:65,types:["dragon","ground"],nature:"Jolly",item:"Yache Berry",ability:"Sand Veil",
+  hp:201,max:201,st:{Atk:158,Def:104,SpA:96,SpD:98,Spe:155},
+  moves:[["Earthquake",8,10],["Dragon Claw",11,15],["Stone Edge",5,8],["Swords Dance",13,20]],status:null},
+];
+const TRAINER={name:"ETHAN",tid:"12345",sid:"54321",playtime:"87:14",loc:"Route 216"};
+const SNIPPET=`opencode.json →\n"mcp": { "pkhex": { "type": "remote",\n  "url": "http://127.0.0.1:8941/mcp" } }`;
+
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const typeCls=t=>({normal:"t-normal",fire:"t-fire",water:"t-water",electric:"t-electric",grass:"t-grass",
+  flying:"t-flying",fighting:"t-fighting",poison:"t-poison",ground:"t-ground",rock:"t-rock",
+  dragon:"t-dragon",dark:"t-dark",ice:"t-ice"}[t]||"t-normal");
+const statusChip=s=>!s?"":`<span class="status-chip s-${s.toLowerCase()}">${s}</span>`;
+const hpClass=(cur,max)=>cur/max<=.25?"low":cur/max<=.5?"mid":"";
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+$("#snipB").textContent=SNIPPET.split("→\n")[1];
+$("#snipC").textContent=SNIPPET.split("→\n")[1];
+
+// ---------- render A ----------
+function renderA(){
+  $("#gridA").innerHTML=PARTY.map((p,i)=>`
+   <article class="card">
+     <div class="top"><span class="name">${p.name}</span>${p.types.map(t=>`<span class="type ${typeCls(t)}">${t.toUpperCase()}</span>`).join("")}<span class="lv num">Lv. ${p.lv}</span></div>
+     <div class="hpline"><span class="num hpval" data-i="${i}">${p.hp}</span>/
+       <span class="num">${p.max}</span><div class="hpbar ${hpClass(p.hp,p.max)}"><i style="width:${100*p.hp/p.max}%"></i></div>
+       ${statusChip(p.status)}</div>
+     <div class="meta"><span>${p.nature} nature</span>·<span class="item">◈ ${p.item}</span>·<span>${p.ability}</span></div>
+     <div class="moves">${p.moves.map(m=>`<span><b>${m[0]}</b><i class="num pp" data-i="${i}" data-m="${m[0]}">${m[1]}/${m[2]}</i></span>`).join("")}</div>
+     <div class="stats">${Object.entries(p.st).map(([k,v])=>`<div><b class="num">${v}</b>${k}</div>`).join("")}</div>
+   </article>`).join("");
+}
+
+// ---------- render B ----------
+function renderB(){
+  $("#rosterB").innerHTML=PARTY.map((p,i)=>`
+   <li class="row">
+     <div class="who"><span class="nm">${String(i+1).padStart(2,"0")} · ${p.name}</span>
+       <span class="sub">Lv.${p.lv} · ${p.nature} · ${p.types.join("/")}${p.status?` · <b style="color:var(--text)">${p.status}</b>`:""}</span></div>
+     <div class="hpwrap"><div class="hpbar ${hpClass(p.hp,p.max)}"><i style="width:${100*p.hp/p.max}%"></i></div>
+       <span class="num"><span class="hpval" data-i="${i}">${p.hp}</span> / ${p.max} HP</span></div>
+     <div class="st">${statusChip(p.status)||'<span style="color:var(--dim);font-size:10px">OK</span>'}</div>
+     <div class="it">◈ ${p.item}</div>
+     <div class="mv">${p.moves.map(m=>`<span><b>${m[0]}</b>&hairsp;<span class="num">${m[1]}</span></span>`).join("")}</div>
+   </li>`).join("");
+}
+
+// ---------- render C ----------
+let SEL=0;
+function renderRail(){
+  $("#railList").innerHTML=PARTY.map((p,i)=>`
+   <li data-i="${i}" class="${i===SEL?"sel":""}">
+     <div class="hpbar ${hpClass(p.hp,p.max)}"><i style="width:${100*p.hp/p.max}%"></i></div>
+     <div><div class="nm">${p.name}</div><div class="sub">Lv.${p.lv}${p.status?" · "+p.status:""}</div></div>
+   </li>`).join("");
+  $$("#railList li").forEach(li=>li.onclick=()=>{SEL=+li.dataset.i;renderDetail();renderRail();});
+}
+function renderDetail(){
+  const p=PARTY[SEL],i=SEL;
+  $("#detailPane").innerHTML=`
+   <h2>${p.name} <span class="lvtag num">Lv. ${p.lv}</span>
+     ${p.types.map(t=>`<span class="type ${typeCls(t)}">${t.toUpperCase()}</span>`).join("")}${statusChip(p.status)}</h2>
+   <div class="bigstats">
+     <div><b class="num hpval" data-i="${i}">${p.hp}</b><span>CUR HP</span></div>
+     <div><b class="num">${p.max}</b><span>MAX HP</span></div>
+     ${Object.entries(p.st).map(([k,v])=>`<div><b class="num">${v}</b><span>${k.toUpperCase()}</span></div>`).join("")}
+   </div>
+   <dl class="kv">
+     <div><dt>Nature</dt><dd>${p.nature}</dd></div><div><dt>Ability</dt><dd>${p.ability}</dd></div>
+     <div><dt>Held item</dt><dd style="color:#fbbf24">◈ ${p.item}</dd></div><div><dt>Slot</dt><dd>#${i+1}</dd></div>
+   </dl>
+   <div class="movelist">${p.moves.map(m=>`<div class="m">${m[0]}<i class="num pp" data-i="${i}" data-m="${m[0]}">${m[1]} / ${m[2]} PP</i></div>`).join("")}</div>`;
+}
+
+// ---- simulated 500ms-poll jitter: values flash, layout never jumps ----
+setInterval(()=>{
+  const i=Math.floor(Math.random()*PARTY.length),p=PARTY[i];
+  if(p.hp<p.max&&Math.random()<.5)p.hp+=Math.min(p.max-p.hp,1+Math.floor(Math.random()*3));
+  else if(p.hp>1)p.hp-=Math.floor(Math.random()*3)+1;
+  const m=p.moves[Math.floor(Math.random()*p.moves.length)];if(m[1]>0)m[1]--;
+  $$(`.hpval[data-i="${i}"]`).forEach(el=>{el.textContent=p.hp;el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash")});
+  $$(`.pp[data-i="${i}"][data-m="${CSS.escape?CSS.escape(m[0]):m[0]}"]`).forEach(el=>{el.textContent=`${m[1]}/${m[2]}`});
+  $$(".hpbar").forEach(()=>{});// bars re-render only on full renders; keep simple
+},2000);
+
+// ---- copy buttons ----
+$$(".copy").forEach(b=>b.onclick=()=>{
+  navigator.clipboard?.writeText($("#"+b.dataset.copy).innerText);
+  const t=b.textContent;b.textContent="Copied!";setTimeout(()=>b.textContent=t,1200);
+});
+
+// ---- variant switcher (?variant= + arrows + keyboard) ----
+const VARIANTS=[["A","Card grid"],["B","Roster rows"],["C","Spotlight"]];
+let cur=Math.max(0,VARIANTS.findIndex(v=>new URLSearchParams(location.search).get("variant")===v[0]));
+function show(k){
+  ["A","B","C"].forEach(v=>{$("#v"+v).hidden=v!==k});
+  $("#vkey").firstChild.nodeValue=k+" — "+VARIANTS.find(v=>v[0]===k)[1];
+  const u=new URL(location);u.searchParams.set("variant",k);history.replaceState(null,"",u);
+  if(k==="A"){if(!$("#gridA").childElementCount)renderA()}
+  else if(k==="B"){if(!$("#rosterB").childElementCount)renderB()}
+  else{renderRail();renderDetail()}
+}
+function cycle(d){cur=(cur+d+VARIANTS.length)%VARIANTS.length;show(VARIANTS[cur][0])}
+$("#prevV").onclick=()=>cycle(-1);$("#nextV").onclick=()=>cycle(1);
+addEventListener("keydown",e=>{
+  if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)||document.activeElement.isContentEditable)return;
+  if(e.key==="ArrowLeft")cycle(-1);if(e.key==="ArrowRight")cycle(1);
+});
+show(VARIANTS[cur][0]);
+</script>
+</body>
+</html>
