@@ -36,9 +36,9 @@
     },
     "backend": "cef",
     "output": {
-      "windows": "./dist/pkhex-mcp.msi",
-      "macos": "./dist/pkhex-mcp.dmg",
-      "linux": "./dist/pkhex-mcp.AppImage"
+      "windows": "./dist/pkhex-mcp-v0.1.0-windows.msi",
+      "macos": "./dist/pkhex-mcp-v0.1.0-macos.dmg",
+      "linux": "./dist/pkhex-mcp-v0.1.0-linux.AppImage"
     }
   }
 }
