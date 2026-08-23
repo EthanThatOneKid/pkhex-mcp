@@ -1,0 +1,4 @@
+2026-08-22 17:35:05 pkhex-mcp bridge loaded (Platinum US -> http://127.0.0.1:8941/sync)
+2026-08-22 17:35:05 domains: Shared WRAM, ARM7 WRAM, SRAM, ROM, Instruction TCM, Data TCM, ARM9 BIOS, ARM7 BIOS, Firmware, ARM9 System Bus, ARM7 System Bus, Waterbox PageData
+2026-08-22 17:35:05 P1 probe: 0
+2026-08-22 17:35:05 pkhex-mcp: server unreachable; will retry next tick

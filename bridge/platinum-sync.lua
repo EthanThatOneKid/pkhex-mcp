@@ -31,8 +31,23 @@ local CHECKSUM_OFFSET = 0x06        -- in-slot: Add16 checksum word
 
 -- --------------------------------- state -----------------------------------
 local warnedGamecode = false
+diagnosed = false
 local lastOk = nil                  -- nil = no post attempted yet
 local lastPostClockMs = 0
+
+-- Diagnostics tee: mirror console lines into bridge.log so the server-side
+-- session can read Lua status without touching the BizHawk UI.
+local LOG_PATH = [[C:\Users\ethan\Documents\GitHub\pkhex-mcp\bridge\bridge.log]]
+local function log(msg)
+    console.log(msg)
+    pcall(function()
+        local f = io.open(LOG_PATH, "a")
+        if f ~= nil then
+            f:write(os.date("%Y-%m-%d %H:%M:%S "), msg, "\n")
+            f:close()
+        end
+    end)
+end
 
 -- ------------------------------- utilities ---------------------------------
 
@@ -221,21 +236,33 @@ local function build_snapshot_json()
 end
 
 local function push_snapshot()
+    -- one-shot diagnostics
+    if not diagnosed then
+        diagnosed = true
+        local okD, domains = pcall(function() return table.concat(memory.getmemorydomainlist(), ", ") end)
+        log("domains: " .. tostring(okD and domains or "getdomainlist failed"))
+        local p1probe = try_read_u32(ANCHOR_P1)
+        log(string.format("P1 probe: %s", tostring(p1probe)))
+    end
+
     local snapshotJson = build_snapshot_json()
     if snapshotJson == nil then return false end
-    local ok = pcall(function()
+    local ok, err = pcall(function()
         comm.httpPost(SERVER_URL, "snapshot=" .. urlencode(snapshotJson))
     end)
-    return ok
+    if not ok then
+        log("httpPost error: " .. tostring(err))
+        return false
+    end
+    return true
 end
 
 local function gamecodeOk()
-    local code = try_read_u32(0x02FFFE0C)
-    if code == GAMECODE_CPUE then return true end
-    -- DeSmuME-family cores expose a header copy in main RAM:
-    code = try_read_u32(0x023FFE0C)
-    if code == GAMECODE_CPUE then return true end
-    return false
+    -- ROM-identity gate via BizHawk's gameinfo API (no memory-domain games):
+    -- matches the US Platinum cartridge by display name.
+    local ok, name = pcall(function() return gameinfo.getromname() end)
+    if not ok or name == nil then return false end
+    return name:lower():find("platinum") ~= nil
 end
 
 -- ----------------------------- frame hook loop -----------------------------
@@ -251,7 +278,7 @@ event.onframeend(function()
     if not gamecodeOk() then
         if not warnedGamecode then
             warnedGamecode = true
-            console.log("pkhex-mcp: waiting for Pokemon Platinum (US, CPUE)...")
+            log("pkhex-mcp: waiting for Pokemon Platinum (US, CPUE)...")
         end
         return
     end
@@ -260,11 +287,11 @@ event.onframeend(function()
     if ok ~= lastOk then
         lastOk = ok
         if ok then
-            console.log("pkhex-mcp: syncing Live State to " .. SERVER_URL)
+            log("pkhex-mcp: syncing Live State to " .. SERVER_URL)
         else
-            console.log("pkhex-mcp: server unreachable; will retry next tick")
+            log("pkhex-mcp: server unreachable; will retry next tick")
         end
     end
 end)
 
-console.log("pkhex-mcp bridge loaded (Platinum US -> " .. SERVER_URL .. ")")
+log("pkhex-mcp bridge loaded (Platinum US -> " .. SERVER_URL .. ")")
