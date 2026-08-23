@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { createApp } from "../src/app.ts";
 import { GameStateStore } from "../src/state/game-state.ts";
 import { makeSyncPayload } from "./fixtures.ts";
@@ -50,8 +50,8 @@ function post(
   });
 }
 
-/** Drive initialize + initialized handshake; returns the session id. */
-async function handshake(app: ReturnType<typeof createApp>): Promise<string> {
+/** Drive initialize + initialized handshake; returns the session id if any. */
+async function handshake(app: ReturnType<typeof createApp>): Promise<string | undefined> {
   const init = await post(app, undefined, rpc(1, "initialize", {
     protocolVersion: "2025-03-26",
     capabilities: {},
@@ -60,9 +60,7 @@ async function handshake(app: ReturnType<typeof createApp>): Promise<string> {
   assertEquals(init.status, 200);
   const initDoc = await jsonBody(init);
   assertEquals(initDoc.result?.serverInfo?.name, "pkhex-mcp");
-  const sessionId = init.headers.get("mcp-session-id");
-  assertExists(sessionId);
-  
+  const sessionId = init.headers.get("mcp-session-id") ?? undefined;
 
   const note = await post(app, sessionId, {
     jsonrpc: "2.0",
@@ -142,6 +140,29 @@ Deno.test("tools serve contract-verbatim decoded data after a Sync", async () =>
   const gs = JSON.parse((gsFrame.result as { content: Array<{ text: string }> }).content[0].text);
   assertEquals(gs.trainerMeta.playerName, "ETHAN");
   assertEquals(gs.sync.ageMs, 500);
+});
+
+Deno.test("a fresh client can re-initialize against an already-initialized server", async () => {
+  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
+
+  // First client: full handshake plus a tool round-trip.
+  const first = await handshake(app);
+  const firstCall = await post(app, first, rpc(2, "tools/call", {
+    name: "get_sync_status",
+    arguments: {},
+  }));
+  assertEquals(firstCall.status, 200);
+
+  // Second client starts from scratch (no session header): a chat-app restart
+  // or a second tab must not require a server restart.
+  const second = await handshake(app);
+  const secondCall = await post(app, second, rpc(3, "tools/call", {
+    name: "get_sync_status",
+    arguments: {},
+  }));
+  assertEquals(secondCall.status, 200);
+  const doc = await jsonBody(secondCall);
+  assertEquals(doc.result.isError ?? false, false);
 });
 
 Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async () => {
