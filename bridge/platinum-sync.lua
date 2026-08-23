@@ -31,7 +31,10 @@ local CHECKSUM_OFFSET = 0x06        -- in-slot: Add16 checksum word
 
 -- --------------------------------- state -----------------------------------
 local warnedGamecode = false
+domainSwept = false
 diagnosed = false
+diagCount = 0
+p1ProbeCounter = 0
 local lastOk = nil                  -- nil = no post attempted yet
 local lastPostClockMs = 0
 
@@ -54,7 +57,7 @@ end
 --- Read a u32 through whichever domain works; returns value or nil.
 local function try_read_u32(address)
     local ok, value = pcall(function()
-        return memory.read_u32_le(address, "Main RAM")
+        return memory.read_u32_le(address, "ARM9 System Bus")
     end)
     if ok then return value end
     local ok2, value2 = pcall(function()
@@ -67,7 +70,7 @@ end
 --- Read `count` bytes as a table of numbers; returns table or nil.
 local function try_read_bytes(address, count)
     local ok, bytes = pcall(function()
-        return memory.read_bytes_as_array(address, count, "Main RAM")
+        return memory.read_bytes_as_array(address, count, "ARM9 System Bus")
     end)
     if ok and bytes ~= nil then return bytes end
     local ok2, bytes2 = pcall(function()
@@ -151,7 +154,7 @@ local GEN4_ASCII = {
 local function decode_ot_name(base_address)
     local chars = {}
     for i = 0, 7 do
-        local code = memory.read_u16_le(base_address + i * 2, "Main RAM")
+        local code = memory.read_u16_le(base_address + i * 2, "ARM9 System Bus")
         if code == 0xFFFF then break end
         local ch = GEN4_ASCII[code]
         if ch then chars[#chars + 1] = ch end
@@ -172,7 +175,7 @@ local function build_snapshot_json()
     if p1 == nil or p1 < 0x02000000 then return nil end
     local p2 = p1 + SAVE_DELTA
 
-    local partyCount = memory.read_u8(p1 + PARTY_COUNT_OFF, "Main RAM") or 0
+    local partyCount = memory.read_u8(p1 + PARTY_COUNT_OFF, "ARM9 System Bus") or 0
     if partyCount > 6 then partyCount = 6 end
 
     -- Torn-read protocol: copy each slot, verify PID stable before/after.
@@ -184,9 +187,9 @@ local function build_snapshot_json()
             -- PID reads; retry until the PID is stable across the copy.
             local attempt, pidBefore, pidAfter
             for _ = 1, 3 do
-                pidBefore = memory.read_u32_le(slotBase, "Main RAM")
+                pidBefore = memory.read_u32_le(slotBase, "ARM9 System Bus")
                 attempt = try_read_bytes(slotBase, SLOT_STRIDE)
-                pidAfter = memory.read_u32_le(slotBase, "Main RAM")
+                pidAfter = memory.read_u32_le(slotBase, "ARM9 System Bus")
                 if attempt ~= nil and pidBefore == pidAfter then break end
             end
             if attempt == nil then
@@ -209,13 +212,13 @@ local function build_snapshot_json()
     end
 
     local playerName = decode_ot_name(p2 + OFF_OTNAME)
-    local tidSid = memory.read_u32_le(p2 + OFF_TIDSID, "Main RAM") or 0
+    local tidSid = memory.read_u32_le(p2 + OFF_TIDSID, "ARM9 System Bus") or 0
     local tid = tidSid % 65536
     local sid = math.floor(tidSid / 65536)
-    local hours = memory.read_u16_le(p2 + OFF_PLAYTIME_H, "Main RAM") or 0
-    local minutes = memory.read_u8(p2 + OFF_PLAYTIME_M, "Main RAM") or 0
-    local seconds = memory.read_u8(p2 + OFF_PLAYTIME_S, "Main RAM") or 0
-    local mapId = memory.read_u16_le(p2 + OFF_MAP_ID, "Main RAM") or 0
+    local hours = memory.read_u16_le(p2 + OFF_PLAYTIME_H, "ARM9 System Bus") or 0
+    local minutes = memory.read_u8(p2 + OFF_PLAYTIME_M, "ARM9 System Bus") or 0
+    local seconds = memory.read_u8(p2 + OFF_PLAYTIME_S, "ARM9 System Bus") or 0
+    local mapId = memory.read_u16_le(p2 + OFF_MAP_ID, "ARM9 System Bus") or 0
 
     local slotJsonParts = {}
     for _, s in ipairs(slots) do
@@ -235,34 +238,80 @@ local function build_snapshot_json()
     )
 end
 
-local function push_snapshot()
-    -- one-shot diagnostics
-    if not diagnosed then
-        diagnosed = true
-        local okD, domains = pcall(function() return table.concat(memory.getmemorydomainlist(), ", ") end)
-        log("domains: " .. tostring(okD and domains or "getdomainlist failed"))
-        local p1probe = try_read_u32(ANCHOR_P1)
-        log(string.format("P1 probe: %s", tostring(p1probe)))
-    end
-
-    local snapshotJson = build_snapshot_json()
-    if snapshotJson == nil then return false end
-    local ok, err = pcall(function()
-        comm.httpPost(SERVER_URL, "snapshot=" .. urlencode(snapshotJson))
-    end)
-    if not ok then
-        log("httpPost error: " .. tostring(err))
-        return false
-    end
-    return true
-end
-
 local function gamecodeOk()
     -- ROM-identity gate via BizHawk's gameinfo API (no memory-domain games):
     -- matches the US Platinum cartridge by display name.
     local ok, name = pcall(function() return gameinfo.getromname() end)
-    if not ok or name == nil then return false end
-    return name:lower():find("platinum") ~= nil
+    if not ok or name == nil then
+        if diagCount < 3 then
+            diagCount = diagCount + 1
+            log("gate: gameinfo error -> " .. tostring(name))
+        end
+        return false
+    end
+    local pass = name:lower():find("platinum") ~= nil
+    if not pass and diagCount < 3 then
+        diagCount = diagCount + 1
+        log("gate: romname='" .. tostring(name) .. "'")
+    end
+    return pass
+end
+
+local function push_snapshot()
+    -- recurring P1 probe (debug): log every ~30s while it reads as 0/nil
+    p1ProbeCounter = (p1ProbeCounter or 0) + 1
+    local p1probe = try_read_u32(ANCHOR_P1)
+    if p1probe == nil or p1probe < 0x02000000 then
+        -- ONE-SHOT domain sweep: find where (or whether) the anchor lives
+        if not domainSwept and gamecodeOk() then
+            domainSwept = true
+            local okList, list = pcall(function() return memory.getmemorydomainlist() end)
+            if okList and type(list) == "table" then
+                for _, domain in ipairs(list) do
+                    local okR, val = pcall(function()
+                        return memory.read_u32_le(ANCHOR_P1, domain)
+                    end)
+                    log(string.format("sweep [%s] @%08X -> %s",
+                        tostring(domain), ANCHOR_P1, tostring(val)))
+                end
+            else
+                log("domain list unavailable: " .. tostring(list))
+            end
+            -- also probe P2 anchor + gamecode mirror across the same sweep next tick
+        end
+        if p1ProbeCounter % 60 == 1 then
+            log(string.format("P1 probe: %s (waiting for save load)", tostring(p1probe)))
+        end
+        return false
+    end
+    if not diagnosed then
+        diagnosed = true
+        log(string.format("P1 anchor live: 0x%08X", p1probe))
+    end
+
+    local snapshotJson = build_snapshot_json()
+    if snapshotJson == nil then return false end
+    local ok, resp = pcall(function()
+        return comm.httpPost(SERVER_URL, "snapshot=" .. urlencode(snapshotJson))
+    end)
+    if not ok then
+        log("httpPost error: " .. tostring(resp)) -- debug: always surface failures
+        return false
+    end
+    -- comm.httpPost returns nil for ANY non-2xx response (see HttpCommunication.Post),
+    -- so a nil result means the server errored/rejected: treat it as failure, not success.
+    if type(resp) ~= "string" then
+        log("post returned no body (non-2xx?): " .. tostring(resp))
+        return false
+    end
+    if resp:find('"error"') then
+        log("server rejected payload: " .. resp:sub(1, 300))
+        return false
+    end
+    if lastOk ~= true then
+        log("Sync posted successfully (" .. #snapshotJson .. " byte payload)")
+    end
+    return true
 end
 
 -- ----------------------------- frame hook loop -----------------------------
@@ -294,4 +343,5 @@ event.onframeend(function()
     end
 end)
 
+pcall(function() comm.httpSetPostUrl(SERVER_URL) end) -- optional pre-registration; never fatal
 log("pkhex-mcp bridge loaded (Platinum US -> " .. SERVER_URL .. ")")

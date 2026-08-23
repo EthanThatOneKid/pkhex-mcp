@@ -133,6 +133,17 @@ export function createApp(options: AppOptions): OpenAPIHono {
     } else {
       rawText = await c.req.text();
     }
+    if (Deno.env.get("PKHEX_SYNC_TRACE") === "1") {
+      try {
+        await Deno.writeTextFile(
+          "logs/sync-incoming.log",
+          `[${new Date().toISOString()}] ct=${contentType} len=${rawText.length} head=${rawText.slice(0, 300)}\n`,
+          { append: true },
+        );
+      } catch {
+        /* logging must never break the route */
+      }
+    }
 
     let candidate: unknown;
     try {
@@ -142,10 +153,30 @@ export function createApp(options: AppOptions): OpenAPIHono {
     }
     const parsed = SyncPayloadSchema.safeParse(candidate);
     if (!parsed.success) {
-      return c.json({ error: "malformed SyncPayload" }, 400);
+      const detail = parsed.error.issues
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      console.error(`[sync] 400 malformed SyncPayload -> ${detail}`);
+      return c.json({ error: "malformed SyncPayload", detail }, 400);
     }
 
-    options.store.recordSync(parsed.data);
+    try {
+      options.store.recordSync(parsed.data);
+    } catch (e) {
+    try {
+      const detail = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+      console.error(`[sync] 500 recordSync threw -> ${detail}`);
+      await Deno.writeTextFile(
+        "logs/sync-errors.log",
+        `[${new Date().toISOString()}] ${detail}\n`,
+        { append: true },
+      );
+      return c.json({ error: "sync failed", detail }, 500);
+    } catch {
+      /* logging must never break the route */
+    }
+    return c.json({ error: "sync failed" }, 500);
+    }
     return c.body(null, 204);
   });
 
