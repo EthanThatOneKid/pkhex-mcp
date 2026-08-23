@@ -100,6 +100,25 @@ Deno.test("missing snapshot field answers 400", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("accepts BizHawk's native payload-key form posts", async () => {
+  // comm.httpPost wraps its argument as the VALUE of a literal `payload`
+  // form field (HttpCommunication.ContentObjectFor) -- the bridge sends raw
+  // JSON and BizHawk owns the encoding.
+  let clock = 1_000;
+  const app = createApp({ store: new GameStateStore({ now: () => clock }) });
+  const res = await app.request("/sync", {
+    method: "POST",
+    headers: { ...HOST, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ payload: JSON.stringify(payloadFor([[0, MON_A]])) })
+      .toString(),
+  });
+  assertEquals(res.status, 204);
+
+  clock = 1_200;
+  const state = await app.request("/state", { headers: { ...HOST } });
+  assertEquals(state.status, 200);
+});
+
 Deno.test("torn slot serves last-known-good invisibly and counts degradation", async () => {
   const app = createApp({ store: new GameStateStore({ now: () => 5_000 }) });
   await postForm(app, payloadFor([[0, MON_A]]));

@@ -125,9 +125,13 @@ export function createApp(options: AppOptions): OpenAPIHono {
       } catch {
         return c.json({ error: "malformed form encoding" }, 400);
       }
-      const field = form["snapshot"];
+      // BizHawk's comm.httpPost wraps its argument as the value of a literal
+      // `payload` form field; hand-rolled clients traditionally use `snapshot`.
+      const field = typeof form["snapshot"] === "string"
+        ? form["snapshot"]
+        : form["payload"];
       if (typeof field !== "string") {
-        return c.json({ error: "missing snapshot field" }, 400);
+        return c.json({ error: "missing snapshot field (snapshot|payload)" }, 400);
       }
       rawText = field;
     } else {
@@ -157,6 +161,17 @@ export function createApp(options: AppOptions): OpenAPIHono {
         .map((i) => `${i.path.join(".")}: ${i.message}`)
         .join("; ");
       console.error(`[sync] 400 malformed SyncPayload -> ${detail}`);
+      if (Deno.env.get("PKHEX_SYNC_TRACE") === "1") {
+        try {
+          await Deno.writeTextFile(
+            "logs/sync-incoming.log",
+            `[${new Date().toISOString()}] 400 detail=${detail}\n`,
+            { append: true },
+          );
+        } catch {
+          /* logging must never break the route */
+        }
+      }
       return c.json({ error: "malformed SyncPayload", detail }, 400);
     }
 

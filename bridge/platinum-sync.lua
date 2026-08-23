@@ -115,23 +115,6 @@ local function base64_encode(bytes)
     return table.concat(out)
 end
 
---- Percent-encode every byte outside the unreserved set (RFC 3986).
-local function urlencode(value)
-    local out = {}
-    for i = 1, #value do
-        local byte = value:byte(i)
-        if (byte >= 48 and byte <= 57)       -- 0-9
-            or (byte >= 65 and byte <= 90)   -- A-Z
-            or (byte >= 97 and byte <= 122)  -- a-z
-            or byte == 45 or byte == 46 or byte == 95 or byte == 126 then -- - _ . ~
-            out[#out + 1] = string.char(byte)
-        else
-            out[#out + 1] = string.format("%%%02X", byte)
-        end
-    end
-    return table.concat(out)
-end
-
 --- Decode an OT name stored as Gen-4 charcode u16s into ASCII (subset).
 local GEN4_ASCII = {
     [0x00] = " ",
@@ -292,7 +275,9 @@ local function push_snapshot()
     local snapshotJson = build_snapshot_json()
     if snapshotJson == nil then return false end
     local ok, resp = pcall(function()
-        return comm.httpPost(SERVER_URL, "snapshot=" .. urlencode(snapshotJson))
+        -- Pass RAW compact JSON: comm.httpPost form-encodes its argument itself,
+    -- under BizHawk's literal `payload` key (verified on the wire, 2.11.1).
+    return comm.httpPost(SERVER_URL, snapshotJson)
     end)
     if not ok then
         log("httpPost error: " .. tostring(resp)) -- debug: always surface failures

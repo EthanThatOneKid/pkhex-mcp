@@ -17,9 +17,9 @@ Deno.test("bridge script gates on the CPUE gamecode", () => {
   assertStringIncludes(SCRIPT, "CPUE");
 });
 
-Deno.test("bridge script posts form-encoded snapshots over comm.httpPost", () => {
+Deno.test("bridge script posts raw JSON over comm.httpPost (BizHawk owns the form encoding)", () => {
   assertStringIncludes(SCRIPT, "comm.httpPost");
-  assertStringIncludes(SCRIPT, '"snapshot=" .. urlencode(snapshotJson)');
+  assertStringIncludes(SCRIPT, "comm.httpPost(SERVER_URL, snapshotJson)");
 });
 
 Deno.test("bridge script uses a wall-clock accumulator on the frame hook", () => {
