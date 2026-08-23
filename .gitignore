@@ -3,3 +3,4 @@ dist/
 node_modules/
 *.local
 local/
+bridge/bridge.log
