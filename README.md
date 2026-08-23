@@ -86,6 +86,28 @@ The server binds loopback only; use literal `127.0.0.1` URLs.
 | Gemini CLI         | Streamable HTTP | settings → `"mcpServers": { "pkhex": { "httpUrl": "http://127.0.0.1:8941/mcp" } }`                                              |
 | Claude Desktop     | stdio           | `mcpServers` → command launching this binary with `--stdio`, or bridge via [`mcp-remote`](https://github.com/geelen/mcp-remote) |
 
+## What your client gets
+
+Five tools over MCP (mirrored by REST under `/doc`):
+
+| Tool                           | Answers                                                   |
+| ------------------------------ | --------------------------------------------------------- |
+| `get_game_state`               | Full Live State: trainer meta, sync health, whole party   |
+| `get_party`                    | All six party slots (`null` when empty)                   |
+| `get_pokemon_by_slot`          | One member by slot 1–6                                    |
+| `find_party_member_by_species` | First member matching name or species id                  |
+| `get_sync_status`              | live (≤2 s) / stale (≤30 s) / disconnected + snapshot age |
+
+Per Pokémon: species (+types), PID, level, current/max HP, status condition
+(slp/psn/brn/frz/par with counters), nature, held item, ability, four moves with
+PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer meta:
+name, TID/SID, playtime, current map id.
+
+State refreshes from emulator RAM every ~500 ms while BizHawk runs. Read-only
+and party-scoped: no save editing, PC boxes, bag, Pokédex, story flags, or
+opponent data (v0.1 scope). Authoritative contracts:
+[docs/spec/v0.1.md](docs/spec/v0.1.md) · machine-readable schema at `/doc`.
+
 ## Desktop packaging (Windows tested-first)
 
 ```sh
