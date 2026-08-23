@@ -26,7 +26,6 @@ local OFF_PLAYTIME_M = 0xA0         -- minutes (u8)
 local OFF_PLAYTIME_S = 0xA1         -- seconds (u8)
 local OFF_MAP_ID = 0x1294           -- P2-relative: current map id (u16)
 
-local FLAGS_OFFSET = 0x04           -- in-slot: flags word (bit0 = partyDecrypted)
 local CHECKSUM_OFFSET = 0x06        -- in-slot: Add16 checksum word
 
 -- --------------------------------- state -----------------------------------
@@ -34,6 +33,7 @@ local warnedGamecode = false
 domainSwept = false
 diagnosed = false
 diagCount = 0
+otNameDiag = false
 p1ProbeCounter = 0
 local lastOk = nil                  -- nil = no post attempted yet
 local lastPostClockMs = 0
@@ -118,20 +118,68 @@ end
 --- Decode an OT name stored as Gen-4 charcode u16s into ASCII (subset).
 local GEN4_ASCII = {
     [0x00] = " ",
-    [0xA1] = "0", [0xA2] = "1", [0xA3] = "2", [0xA4] = "3", [0xA5] = "4",
-    [0xA6] = "5", [0xA7] = "6", [0xA8] = "7", [0xA9] = "8", [0xAA] = "9",
-    [0xBB] = "A", [0xBC] = "B", [0xBD] = "C", [0xBE] = "D", [0xBF] = "E",
-    [0xC0] = "F", [0xC1] = "G", [0xC2] = "H", [0xC3] = "I", [0xC4] = "J",
-    [0xC5] = "K", [0xC6] = "L", [0xC7] = "M", [0xC8] = "N", [0xC9] = "O",
-    [0xCA] = "P", [0xCB] = "Q", [0xCC] = "R", [0xCD] = "S", [0xCE] = "T",
-    [0xCF] = "U", [0xD0] = "V", [0xD1] = "W", [0xD2] = "X", [0xD3] = "Y",
-    [0xD4] = "Z",
-    [0xD5] = "a", [0xD6] = "b", [0xD7] = "c", [0xD8] = "d", [0xD9] = "e",
-    [0xDA] = "f", [0xDB] = "g", [0xDC] = "h", [0xDD] = "i", [0xDE] = "j",
-    [0xDF] = "k", [0xE0] = "l", [0xE1] = "m", [0xE2] = "n", [0xE3] = "o",
-    [0xE4] = "p", [0xE5] = "q", [0xE6] = "r", [0xE7] = "s", [0xE8] = "t",
-    [0xE9] = "u", [0xEA] = "v", [0xEB] = "w", [0xEC] = "x", [0xED] = "y",
-    [0xEE] = "z",
+    [0x121] = "0",
+    [0x122] = "1",
+    [0x123] = "2",
+    [0x124] = "3",
+    [0x125] = "4",
+    [0x126] = "5",
+    [0x127] = "6",
+    [0x128] = "7",
+    [0x129] = "8",
+    [0x12a] = "9",
+    [0x12b] = "A",
+    [0x12c] = "B",
+    [0x12d] = "C",
+    [0x12e] = "D",
+    [0x12f] = "E",
+    [0x130] = "F",
+    [0x131] = "G",
+    [0x132] = "H",
+    [0x133] = "I",
+    [0x134] = "J",
+    [0x135] = "K",
+    [0x136] = "L",
+    [0x137] = "M",
+    [0x138] = "N",
+    [0x139] = "O",
+    [0x13a] = "P",
+    [0x13b] = "Q",
+    [0x13c] = "R",
+    [0x13d] = "S",
+    [0x13e] = "T",
+    [0x13f] = "U",
+    [0x140] = "V",
+    [0x141] = "W",
+    [0x142] = "X",
+    [0x143] = "Y",
+    [0x144] = "Z",
+    [0x145] = "a",
+    [0x146] = "b",
+    [0x147] = "c",
+    [0x148] = "d",
+    [0x149] = "e",
+    [0x14a] = "f",
+    [0x14b] = "g",
+    [0x14c] = "h",
+    [0x14d] = "i",
+    [0x14e] = "j",
+    [0x14f] = "k",
+    [0x150] = "l",
+    [0x151] = "m",
+    [0x152] = "n",
+    [0x153] = "o",
+    [0x154] = "p",
+    [0x155] = "q",
+    [0x156] = "r",
+    [0x157] = "s",
+    [0x158] = "t",
+    [0x159] = "u",
+    [0x15a] = "v",
+    [0x15b] = "w",
+    [0x15c] = "x",
+    [0x15d] = "y",
+    [0x15e] = "z",
 }
 
 local function decode_ot_name(base_address)
@@ -178,12 +226,13 @@ local function build_snapshot_json()
             if attempt == nil then
                 slots[#slots + 1] = { bytes = string.rep("A", 315) .. "=", decryptedInPlace = false }
             else
-                -- normalize to 0-indexed-friendly list for read_u16_at
-                local flagsWord = read_u16_at(attempt, FLAGS_OFFSET)
-                local decryptedInPlace = (math.floor(flagsWord / 1) % 2) == 1
+                -- Wire bytes are raw ENCRYPTED captures: BizHawk bulk-reads the
+                -- party struct verbatim (verified offline against all six live
+                -- slots, 2026-08-23). The in-game decrypted-in-place flag does
+                -- NOT describe these bytes; the decoder must always decrypt.
                 slots[#slots + 1] = {
                     bytes = base64_encode(attempt),
-                    decryptedInPlace = decryptedInPlace,
+                    decryptedInPlace = false,
                 }
             end
         else
@@ -195,6 +244,15 @@ local function build_snapshot_json()
     end
 
     local playerName = decode_ot_name(p2 + OFF_OTNAME)
+    if not otNameDiag then
+        otNameDiag = true
+        local codes = {}
+        for i = 0, 7 do
+            codes[#codes + 1] = string.format("%04X",
+                memory.read_u16_le(p2 + OFF_OTNAME + i * 2, "ARM9 System Bus") or 0)
+        end
+        log("OT name u16 codes: " .. table.concat(codes, " "))
+    end
     local tidSid = memory.read_u32_le(p2 + OFF_TIDSID, "ARM9 System Bus") or 0
     local tid = tidSid % 65536
     local sid = math.floor(tidSid / 65536)

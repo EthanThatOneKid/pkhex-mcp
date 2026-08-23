@@ -141,7 +141,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
       try {
         await Deno.writeTextFile(
           "logs/sync-incoming.log",
-          `[${new Date().toISOString()}] ct=${contentType} len=${rawText.length} head=${rawText.slice(0, 300)}\n`,
+          `[${new Date().toISOString()}] ct=${contentType} len=${rawText.length} head=${rawText.slice(0, 2900)}\n`,
           { append: true },
         );
       } catch {
