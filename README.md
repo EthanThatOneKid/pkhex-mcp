@@ -67,8 +67,8 @@ data tools report "no Sync received yet" — that's the designed pre-Sync state.
 
 ## Connect your game (Platinum US)
 
-Follow **[bridge/README.md](bridge/README.md)**: install BizHawk 2.11.1+, place
-your NDS BIOS/firmware files, open your Platinum ROM, and load
+Follow **[bridge/README.md](bridge/README.md)**: install BizHawk 2.11.1+, open
+your Platinum ROM (BIOS/firmware dumps optional — Direct Boot works), and load
 `bridge/platinum-sync.lua` in the Lua Console. Your party appears in the
 Inspector within ~1 second.
 
@@ -104,12 +104,16 @@ macOS/Linux builds are emitted but untested tiers.
 ```sh
 deno task check   # typecheck
 deno task lint    # lint
-deno task test    # full suite (39+ tests)
+deno task test    # full suite (48 tests)
 deno task desktop # run inside a desktop window with HMR
 ```
 
 Optional local smoke against a running server + BizHawk:
 `PKHEX_LOCAL_SMOKE=1 deno test tests/local-smoke.test.ts` (inert otherwise).
+
+Wire debugging: start the server with `PKHEX_SYNC_TRACE=1` to log every `/sync`
+request (and any schema-rejection detail) to `logs/sync-incoming.log`;
+`recordSync` failures always land in `logs/sync-errors.log`.
 
 No copyrighted game data ever lives in this repository — all test fixtures are
 synthetic, built field-by-field.
