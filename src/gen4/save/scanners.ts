@@ -7,6 +7,7 @@
  * LCG, bit-order, charmap) happens HERE — never in the model.
  */
 
+import { encodeBase64 } from "@std/encoding";
 import {
   add16Checksum,
   decryptSlot,
@@ -352,6 +353,41 @@ export function getStoryFlags(
     name: n.name,
     set: eventFlagSet(reader, n.flag),
   }));
+}
+
+// --------------------------- raw region reads ---------------------------
+
+/** Hard cap per Region read (ADR-0003): paginate for larger ranges. */
+export const RAW_REGION_MAX_BYTES = 1024;
+
+export interface RawRegion {
+  offset: number;
+  length: number;
+  base64: string;
+}
+
+/**
+ * Raw slot-relative bytes as compact base64. Rejects (never truncates):
+ * non-integer/negative offsets, lengths outside 1..1024, and windows past
+ * the end of the active partition.
+ */
+export function readRawRegion(
+  reader: SaveFileReader,
+  offset: number,
+  length: number,
+): RawRegion {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new RangeError("offset must be a non-negative integer");
+  }
+  if (
+    !Number.isInteger(length) || length < 1 || length > RAW_REGION_MAX_BYTES
+  ) {
+    throw new RangeError(
+      `length must be 1..${RAW_REGION_MAX_BYTES} bytes per call; paginate for larger ranges`,
+    );
+  }
+  const bytes = reader.read(offset, length);
+  return { offset, length, base64: encodeBase64(bytes) };
 }
 
 // ----------------------------- party audit ------------------------------

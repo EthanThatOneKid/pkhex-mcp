@@ -10,6 +10,8 @@ import {
   getStoryFlags,
   getTrainerCard,
   isSpeciesCaught,
+  RAW_REGION_MAX_BYTES,
+  readRawRegion,
 } from "../src/gen4/save/scanners.ts";
 import {
   makeEncryptedPartySlot,
@@ -19,6 +21,32 @@ import {
 } from "./helpers/save-builder.ts";
 
 const PARTITION = 0x40000;
+
+Deno.test("read_raw_region returns base64 of the exact slot-relative window", () => {
+  const { reader } = buildRichSave();
+  const region = readRawRegion(reader, 0x78, 4);
+  assertEquals(region.offset, 0x78);
+  assertEquals(region.length, 4);
+  // TID 1256 = E8 04, SID 32863 = 5F 80
+  assertEquals(region.base64, "6ARfgA==");
+});
+
+Deno.test("read_raw_region rejects over-cap, invalid, and out-of-bounds calls", () => {
+  const { reader } = buildRichSave();
+  const expectThrow = (offset: number, length: number, needle: string) => {
+    let message = "";
+    try {
+      readRawRegion(reader, offset, length);
+    } catch (e) {
+      message = String(e);
+    }
+    assertEquals(message.includes(needle), true, `${offset}+${length} -> ${message}`);
+  };
+  expectThrow(0, RAW_REGION_MAX_BYTES + 1, "paginate for larger ranges");
+  expectThrow(-1, 16, "non-negative");
+  expectThrow(0x78, 0, "1..");
+  expectThrow(PARTITION - 2, 4, "out of bounds");
+});
 
 function buildRichSave() {
   const data = makeSave({

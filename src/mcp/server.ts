@@ -24,6 +24,7 @@ import {
   getStoryFlags,
   getTrainerCard,
   isSpeciesCaught,
+  readRawRegion,
   resolveSpeciesId,
 } from "../gen4/save/scanners.ts";
 import { getSectionMap } from "../gen4/save/section-map.ts";
@@ -172,6 +173,18 @@ export function createMcpServer(
     "Raw party audit from the save file: per member, IVs, EVs, nature, level, species and move ids — beyond what live sync exposes.",
     {},
     withSave((r) => getPartyAudit(r)),
+  );
+
+  server.tool(
+    "read_raw_region",
+    "Raw save-file bytes as base64 for exploration beyond the scanners. Slot-relative offset; HARD CAP 1024 bytes per call — larger requests are rejected, paginate instead.",
+    {
+      offset: z.number().int().min(0),
+      length: z.number().int().min(1).max(1024),
+    },
+    withSave((r, args: { offset: number; length: number }) =>
+      readRawRegion(r, args.offset, args.length)
+    ),
   );
 
   // ---- live state pipeline (v0.1, unchanged) ----
