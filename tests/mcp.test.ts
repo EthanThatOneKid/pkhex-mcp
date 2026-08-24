@@ -18,6 +18,7 @@ const RESOURCE_URIS = [
   "pkhex://reference/natures",
   "pkhex://reference/field-guide",
   "pkhex://reference/offset-map",
+  "pkhex://reference/story-flags",
 ];
 
 /** Streamable HTTP replies may be plain JSON or SSE -- handle both. */

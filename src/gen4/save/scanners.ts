@@ -372,12 +372,14 @@ export interface RawRegion {
   offset: number;
   length: number;
   base64: string;
+  /** Spaced lowercase byte pairs — inference-friendly rendering. */
+  hex: string;
 }
 
 /**
- * Raw slot-relative bytes as compact base64. Rejects (never truncates):
- * non-integer/negative offsets, lengths outside 1..1024, and windows past
- * the end of the active partition.
+ * Raw slot-relative bytes as compact base64 + spaced hex. Rejects (never
+ * truncates): non-integer/negative offsets, lengths outside 1..1024, and
+ * windows past the end of the active partition.
  */
 export function readRawRegion(
   reader: SaveFileReader,
@@ -395,7 +397,14 @@ export function readRawRegion(
     );
   }
   const bytes = reader.read(offset, length);
-  return { offset, length, base64: encodeBase64(bytes) };
+  return {
+    offset,
+    length,
+    base64: encodeBase64(bytes),
+    hex: Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(
+      " ",
+    ),
+  };
 }
 
 // --------------------- encrypted record decoding ------------------------

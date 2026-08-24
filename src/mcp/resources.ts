@@ -186,6 +186,22 @@ export function registerReferenceResources(server: McpServer): void {
         }
       },
     },
+    {
+      name: "story-flags",
+      uri: "pkhex://reference/story-flags",
+      description:
+        "Platinum US story/event flag names (flag number -> meaning), curated from PKHeX's flags_pt_en.txt.",
+      load: async () => {
+        try {
+          const tsv = await Deno.readTextFile(
+            "docs/reference/story-flags-pt.tsv",
+          );
+          return `# Platinum US event/story flags\n\nflag\tkind\tname\n\n${tsv}`;
+        } catch (e) {
+          return `story-flags table unavailable: ${String(e)}`;
+        }
+      },
+    },
   ];
 
   for (const entry of entries) {

@@ -58,13 +58,14 @@ Deno.test("decode_pokemon_record flags torn records instead of decoding garbage"
   assertEquals(rec.speciesName, null);
 });
 
-Deno.test("read_raw_region returns base64 of the exact slot-relative window", () => {
+Deno.test("read_raw_region returns base64 + hex of the exact slot-relative window", () => {
   const { reader } = buildRichSave();
   const region = readRawRegion(reader, 0x78, 4);
   assertEquals(region.offset, 0x78);
   assertEquals(region.length, 4);
   // TID 1256 = E8 04, SID 32863 = 5F 80
   assertEquals(region.base64, "6ARfgA==");
+  assertEquals(region.hex, "e8 04 5f 80");
 });
 
 Deno.test("read_raw_region rejects over-cap, invalid, and out-of-bounds calls", () => {

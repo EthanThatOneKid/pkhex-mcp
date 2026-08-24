@@ -53,7 +53,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 
   server.tool(
     "read_raw_region",
-    "Raw save-file bytes as base64 for exploration beyond the scanners. Slot-relative offset; HARD CAP 1024 bytes per call — larger requests are rejected, paginate instead.",
+    "Raw save-file bytes as base64 + spaced hex for exploration beyond the scanners. Slot-relative offset; HARD CAP 1024 bytes per call — larger requests are rejected, paginate instead.",
     {
       offset: z.number().int().min(0),
       length: z.number().int().min(1).max(1024),
