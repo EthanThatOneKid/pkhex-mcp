@@ -5,3 +5,4 @@ node_modules/
 local/
 bridge/bridge.log
 logs/
+opencode.json
