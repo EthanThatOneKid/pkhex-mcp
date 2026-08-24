@@ -40,7 +40,11 @@ Deno.test("read_raw_region rejects over-cap, invalid, and out-of-bounds calls", 
     } catch (e) {
       message = String(e);
     }
-    assertEquals(message.includes(needle), true, `${offset}+${length} -> ${message}`);
+    assertEquals(
+      message.includes(needle),
+      true,
+      `${offset}+${length} -> ${message}`,
+    );
   };
   expectThrow(0, RAW_REGION_MAX_BYTES + 1, "paginate for larger ranges");
   expectThrow(-1, 16, "non-negative");
@@ -159,7 +163,7 @@ Deno.test("party audit extracts IVs/EVs/nature from encrypted slots", () => {
 Deno.test("pc box decodes stored records and finds by species", () => {
   const { reader } = buildRichSave();
   const view = getPcBox(reader);
-  assertEquals(view.box, 1);
+  assertEquals(view.box, 2); // 1-based, matches game UI (player-verified)
   assertEquals(view.currentBox, true);
   assertEquals(view.slots[0]?.speciesName, "Infernape");
   assertEquals(view.slots[5]?.speciesName, "Ponyta");
@@ -167,7 +171,7 @@ Deno.test("pc box decodes stored records and finds by species", () => {
 
   const hits = findInPcBox(reader, "Ponyta");
   assertEquals(hits, [{
-    box: 1,
+    box: 2,
     slot: 5,
     speciesId: 77,
     speciesName: "Ponyta",
@@ -177,7 +181,7 @@ Deno.test("pc box decodes stored records and finds by species", () => {
 
 Deno.test("empty PC boxes decode to all-null slots", () => {
   const { reader } = buildRichSave();
-  const empty = getPcBox(reader, 17);
+  const empty = getPcBox(reader, 18); // last box, 1-based
   assertEquals(empty.currentBox, false);
   assertEquals(empty.slots.every((s) => s.speciesId === null), true);
 });

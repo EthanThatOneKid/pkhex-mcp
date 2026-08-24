@@ -253,8 +253,10 @@ function storedSpecies(
 }
 
 const BOX_COUNT = 18;
-
-export function getPcBox(reader: SaveFileReader, boxIndex?: number): PcBoxView {
+export function getPcBox(
+  reader: SaveFileReader,
+  boxNumber?: number,
+): PcBoxView {
   // reader offsets are SLOT-relative; storage constants are already
   // partition-relative, so pass them straight through (no base addition).
   const storageRel = storageOffsets.blockStartPartitionRelative;
@@ -262,9 +264,14 @@ export function getPcBox(reader: SaveFileReader, boxIndex?: number): PcBoxView {
     reader,
     storageRel + storageOffsets.currentBox.offset,
   );
-  const box = boxIndex ?? currentBox;
+  // Box NUMBERS are 1-based everywhere user-facing (the game's own UI shows
+  // "Box 2" for storage index 1 — player-verified 2026-08-23); the storage
+  // byte itself stays 0-indexed internally.
+  const box = (boxNumber ?? currentBox + 1) - 1;
   if (!Number.isInteger(box) || box < 0 || box >= BOX_COUNT) {
-    throw new Error(`box index out of range: ${box}`);
+    throw new Error(
+      `box number out of range: ${box + 1} (valid 1..${BOX_COUNT})`,
+    );
   }
   const boxStartRel = storageRel + storageOffsets.boxDataStart.offset +
     box * storageOffsets.boxDataLengthPerBox;
@@ -280,7 +287,7 @@ export function getPcBox(reader: SaveFileReader, boxIndex?: number): PcBoxView {
       speciesName: speciesId === null ? null : SPECIES[speciesId].name,
     });
   }
-  return { box, currentBox: box === currentBox, slots };
+  return { box: box + 1, currentBox: box === currentBox, slots };
 }
 
 export interface PcHit {
@@ -298,10 +305,10 @@ export function findInPcBox(
   if (targetId === null) return [];
   const hits: PcHit[] = [];
   for (let box = 0; box < BOX_COUNT; box++) {
-    for (const entry of getPcBox(reader, box).slots) {
+    for (const entry of getPcBox(reader, box + 1).slots) {
       if (entry.speciesId === targetId) {
         hits.push({
-          box,
+          box: box + 1,
           slot: entry.slot,
           speciesId: entry.speciesId!,
           speciesName: entry.speciesName!,
