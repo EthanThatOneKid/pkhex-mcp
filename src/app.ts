@@ -1,4 +1,4 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { mountMcpHttp } from "./routes/mcp.ts";
 import indexHtml from "./ui/index.html" with { type: "text" };
@@ -101,6 +101,8 @@ const getStateRoute = createRoute({
 
 export interface AppOptions {
   store: GameStateStore;
+  /** Path to the wired BizHawk SaveRAM copy; enables save-scanner tools. */
+  savePath?: string;
 }
 
 export function createApp(options: AppOptions): OpenAPIHono {
@@ -131,7 +133,10 @@ export function createApp(options: AppOptions): OpenAPIHono {
         ? form["snapshot"]
         : form["payload"];
       if (typeof field !== "string") {
-        return c.json({ error: "missing snapshot field (snapshot|payload)" }, 400);
+        return c.json(
+          { error: "missing snapshot field (snapshot|payload)" },
+          400,
+        );
       }
       rawText = field;
     } else {
@@ -141,7 +146,11 @@ export function createApp(options: AppOptions): OpenAPIHono {
       try {
         await Deno.writeTextFile(
           "logs/sync-incoming.log",
-          `[${new Date().toISOString()}] ct=${contentType} len=${rawText.length} head=${rawText.slice(0, 2900)}\n`,
+          `[${
+            new Date().toISOString()
+          }] ct=${contentType} len=${rawText.length} head=${
+            rawText.slice(0, 2900)
+          }\n`,
           { append: true },
         );
       } catch {
@@ -178,19 +187,21 @@ export function createApp(options: AppOptions): OpenAPIHono {
     try {
       options.store.recordSync(parsed.data);
     } catch (e) {
-    try {
-      const detail = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
-      console.error(`[sync] 500 recordSync threw -> ${detail}`);
-      await Deno.writeTextFile(
-        "logs/sync-errors.log",
-        `[${new Date().toISOString()}] ${detail}\n`,
-        { append: true },
-      );
-      return c.json({ error: "sync failed", detail }, 500);
-    } catch {
-      /* logging must never break the route */
-    }
-    return c.json({ error: "sync failed" }, 500);
+      try {
+        const detail = e instanceof Error
+          ? `${e.message}\n${e.stack}`
+          : String(e);
+        console.error(`[sync] 500 recordSync threw -> ${detail}`);
+        await Deno.writeTextFile(
+          "logs/sync-errors.log",
+          `[${new Date().toISOString()}] ${detail}\n`,
+          { append: true },
+        );
+        return c.json({ error: "sync failed", detail }, 500);
+      } catch {
+        /* logging must never break the route */
+      }
+      return c.json({ error: "sync failed" }, 500);
     }
     return c.body(null, 204);
   });
@@ -208,7 +219,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
     return c.body(stylesCss);
   });
 
-  mountMcpHttp(app, options.store);
+  mountMcpHttp(app, options.store, { savePath: options.savePath });
 
   app.openapi(getStateRoute, (c) => {
     const snapshot = options.store.getGameState();
@@ -229,12 +240,17 @@ export function createApp(options: AppOptions): OpenAPIHono {
         description:
           "Canonical: application/json SyncPayload. The Bridge script sends the same JSON as one application/x-www-form-urlencoded field named 'snapshot'. Shape: see components.GameState slots/trainerMeta (SyncPayload is the wire-truth twin).",
         content: {
-          "application/json": { schema: { $ref: "#/components/schemas/SyncPayload" } },
+          "application/json": {
+            schema: { $ref: "#/components/schemas/SyncPayload" },
+          },
           "application/x-www-form-urlencoded": {
             schema: {
               type: "object",
               properties: {
-                snapshot: { type: "string", description: "SyncPayload JSON string" },
+                snapshot: {
+                  type: "string",
+                  description: "SyncPayload JSON string",
+                },
               },
               required: ["snapshot"],
             },

@@ -88,7 +88,9 @@ The server binds loopback only; use literal `127.0.0.1` URLs.
 
 ## What your client gets
 
-Five tools over MCP (mirrored by REST under `/doc`):
+Two families of tools over MCP (mirrored by REST under `/doc`):
+
+**Live party** — refreshed from emulator RAM every ~500 ms while BizHawk runs:
 
 | Tool                           | Answers                                                   |
 | ------------------------------ | --------------------------------------------------------- |
@@ -98,15 +100,30 @@ Five tools over MCP (mirrored by REST under `/doc`):
 | `find_party_member_by_species` | First member matching name or species id                  |
 | `get_sync_status`              | live (≤2 s) / stale (≤30 s) / disconnected + snapshot age |
 
+**Save-file scanners** — open-ended answers from the wired BizHawk SaveRAM copy
+(set `PKHEX_SAVE_PATH`; refreshes on every in-game save):
+
+| Tool                | Answers                                              |
+| ------------------- | ---------------------------------------------------- |
+| `get_trainer_card`  | Name, TID/SID, money, badge count, playtime          |
+| `get_badges`        | Badge case by gym order                              |
+| `get_bag`           | Every pouch with item names and quantities           |
+| `get_dex_summary`   | Seen/caught counts                                   |
+| `is_species_caught` | Caught verdict for a dex id or species name          |
+| `get_pc_box`        | One PC box decoded slot-by-slot                      |
+| `find_in_pc_box`    | Where a species is stored across all 18 boxes        |
+| `get_story_flags`   | Notable story-progress event flags                   |
+| `get_party_audit`   | Raw per-member IVs/EVs/nature/moves beyond live sync |
+| `get_section_map`   | The machine-readable offset map itself               |
+
 Per Pokémon: species (+types), PID, level, current/max HP, status condition
 (slp/psn/brn/frz/par with counters), nature, held item, ability, four moves with
 PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer meta:
 name, TID/SID, playtime, current map id.
 
-State refreshes from emulator RAM every ~500 ms while BizHawk runs. Read-only
-and party-scoped: no save editing, PC boxes, bag, Pokédex, story flags, or
-opponent data (v0.1 scope). Authoritative contracts:
-[docs/spec/v0.1.md](docs/spec/v0.1.md) · machine-readable schema at `/doc`.
+Read-only and Platinum-US scoped: no save editing, no games beyond CPUE (v0.2
+scope). Authoritative contracts: [docs/spec/v0.1.md](docs/spec/v0.1.md) ·
+[ADR-0003](docs/adr/0003-context-layer.md) · machine-readable schema at `/doc`.
 
 ## Desktop packaging (Windows tested-first)
 

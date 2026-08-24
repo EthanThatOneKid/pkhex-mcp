@@ -10,8 +10,12 @@ import type { GameStateStore } from "../state/game-state.ts";
  * restart. This is safe because every tool reads the shared GameStateStore;
  * there is no per-session state on this local, single-user surface.
  */
-export function mountMcpHttp(app: OpenAPIHono, store: GameStateStore): void {
-  const server = createMcpServer(store);
+export function mountMcpHttp(
+  app: OpenAPIHono,
+  store: GameStateStore,
+  options: { savePath?: string } = {},
+): void {
+  const server = createMcpServer(store, options);
   const transport = new StreamableHTTPTransport();
   const ready = server.connect(transport);
   app.all("/mcp", async (c) => {

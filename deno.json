@@ -8,7 +8,7 @@
     "check": "deno check src/ tests/",
     "lint": "deno lint",
     "fmt": "deno fmt",
-    "test": "deno test --allow-read --allow-run --allow-env",
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env",
     "desktop": "deno desktop --hmr src/main.ts",
     "build:win": "deno desktop --compress=xz --target x86_64-pc-windows-msvc",
     "build:macos": "deno desktop --compress=xz --target aarch64-apple-darwin",
