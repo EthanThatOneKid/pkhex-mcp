@@ -116,6 +116,10 @@ Two families of tools over MCP (mirrored by REST under `/doc`):
 | `get_party_audit`   | Raw per-member IVs/EVs/nature/moves beyond live sync |
 | `get_section_map`   | The machine-readable offset map itself               |
 
+**Reference resources** (`pkhex://reference/<name>`) — pinnable lookup tables
+(species, moves, items, abilities, natures), the rendered offset map, and a
+field guide teaching efficient save navigation.
+
 Per Pokémon: species (+types), PID, level, current/max HP, status condition
 (slp/psn/brn/frz/par with counters), nature, held item, ability, four moves with
 PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer meta:

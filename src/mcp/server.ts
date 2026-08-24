@@ -28,6 +28,7 @@ import {
   resolveSpeciesId,
 } from "../gen4/save/scanners.ts";
 import { getSectionMap } from "../gen4/save/section-map.ts";
+import { registerReferenceResources } from "./resources.ts";
 
 export interface McpServerOptions {
   /** Absolute or repo-relative path to the wired BizHawk SaveRAM copy. */
@@ -68,6 +69,7 @@ export function createMcpServer(
   options: McpServerOptions = {},
 ): McpServer {
   const server = new McpServer({ name: "pkhex-mcp", version: "0.1.0" });
+  registerReferenceResources(server);
 
   // ---- save-file context layer (ADR-0003) ----
   const NO_SAVE =

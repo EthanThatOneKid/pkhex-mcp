@@ -170,6 +170,65 @@ Deno.test("save scanners answer from PKHEX_SAVE_PATH and explain when unset", as
   assertStringIncludes(doc2.result.content[0].text, "PKHEX_SAVE_PATH");
 });
 
+Deno.test("reference resources list and read over /mcp", async () => {
+  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
+  const sessionId = await handshake(app);
+
+  const list = await post(app, sessionId, rpc(30, "resources/list"));
+  assertEquals(list.status, 200);
+  const listDoc = await jsonBody(list);
+  const uris: string[] = listDoc.result.resources.map((r: { uri: string }) =>
+    r.uri
+  );
+  for (
+    const expected of [
+      "pkhex://reference/species",
+      "pkhex://reference/moves",
+      "pkhex://reference/items",
+      "pkhex://reference/abilities",
+      "pkhex://reference/natures",
+      "pkhex://reference/field-guide",
+      "pkhex://reference/offset-map",
+    ]
+  ) {
+    assertEquals(uris.includes(expected), true, `missing resource ${expected}`);
+  }
+
+  const species = await post(
+    app,
+    sessionId,
+    rpc(31, "resources/read", {
+      uri: "pkhex://reference/species",
+    }),
+  );
+  assertEquals(species.status, 200);
+  const speciesDoc = await jsonBody(species);
+  assertEquals(
+    speciesDoc.result.contents[0].text.includes("Infernape"),
+    true,
+  );
+
+  const guide = await post(
+    app,
+    sessionId,
+    rpc(32, "resources/read", {
+      uri: "pkhex://reference/field-guide",
+    }),
+  );
+  const guideDoc = await jsonBody(guide);
+  assertStringIncludes(guideDoc.result.contents[0].text, "Scanner first");
+
+  const offsets = await post(
+    app,
+    sessionId,
+    rpc(33, "resources/read", {
+      uri: "pkhex://reference/offset-map",
+    }),
+  );
+  const offsetsDoc = await jsonBody(offsets);
+  assertStringIncludes(offsetsDoc.result.contents[0].text, "footer");
+});
+
 Deno.test("data tools hard-error only before the first-ever Sync", async () => {
   const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
   const sessionId = await handshake(app);
