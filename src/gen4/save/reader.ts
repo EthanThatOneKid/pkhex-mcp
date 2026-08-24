@@ -166,6 +166,11 @@ export class SaveFileReader {
     return new SaveFileReader(data, selectSlot(data));
   }
 
+  /** Total bytes of the underlying save file (both partitions). */
+  get fileSize(): number {
+    return this.#data.length;
+  }
+
   /** Slot-relative bytes from the active partition. */
   read(offset: number, length: number): Uint8Array {
     const start = this.slot.base + offset;

@@ -1,19 +1,20 @@
 /**
  * Battery scanners: server-side readers over the save file that return
- * decoded answers for the eight acceptance questions (ADR-0003). Pure
- * functions over SaveFileReader; the MCP layer wraps them.
+ * decoded answers for the acceptance battery (ADR-0003), plus the raw-first
+ * primitives of ADR-0006 (raw region reads + encrypted record decoding).
  *
  * Deterministic-helper boundary: every byte-level transform (checksums,
  * LCG, bit-order, charmap) happens HERE — never in the model.
  */
 
-import { encodeBase64 } from "@std/encoding";
+import { decodeBase64, encodeBase64 } from "@std/encoding";
 import {
   add16Checksum,
   decryptSlot,
   lcgXorRegion,
   unshuffleBlocks,
 } from "../crypto.ts";
+import { parseStatus } from "../deserialize.ts";
 import { ITEMS } from "../data/items.ts";
 import { MOVES } from "../data/moves.ts";
 import { SPECIES } from "../data/species.ts";
@@ -213,6 +214,7 @@ export interface PcSlot {
 }
 
 export interface PcBoxView {
+  /** 1-based box number, matching the game UI (player-verified). */
   box: number;
   currentBox: boolean;
   slots: PcSlot[];
@@ -224,6 +226,7 @@ function isEmptyStored(record: Uint8Array): boolean {
   for (const b of record) if (b !== EMPTY_RECORD_BYTE) return false;
   return true;
 }
+
 /**
  * Decrypt a 136-byte stored record: LCG-XOR with the checksum word, then
  * unshuffle blocks. Stored PK4 has no PID-XORed battle tail.
@@ -253,28 +256,26 @@ function storedSpecies(
 }
 
 const BOX_COUNT = 18;
+
+/** Box NUMBERS are 1-based everywhere user-facing (game UI shows "Box 2"
+ * for storage index 1 — player-verified); storage byte stays 0-indexed. */
 export function getPcBox(
   reader: SaveFileReader,
   boxNumber?: number,
 ): PcBoxView {
-  // reader offsets are SLOT-relative; storage constants are already
-  // partition-relative, so pass them straight through (no base addition).
   const storageRel = storageOffsets.blockStartPartitionRelative;
-  const currentBox = byte(
+  const currentIndex = byte(
     reader,
     storageRel + storageOffsets.currentBox.offset,
   );
-  // Box NUMBERS are 1-based everywhere user-facing (the game's own UI shows
-  // "Box 2" for storage index 1 — player-verified 2026-08-23); the storage
-  // byte itself stays 0-indexed internally.
-  const box = (boxNumber ?? currentBox + 1) - 1;
-  if (!Number.isInteger(box) || box < 0 || box >= BOX_COUNT) {
+  const index = (boxNumber ?? currentIndex + 1) - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= BOX_COUNT) {
     throw new Error(
-      `box number out of range: ${box + 1} (valid 1..${BOX_COUNT})`,
+      `box number out of range: ${index + 1} (valid 1..${BOX_COUNT})`,
     );
   }
   const boxStartRel = storageRel + storageOffsets.boxDataStart.offset +
-    box * storageOffsets.boxDataLengthPerBox;
+    index * storageOffsets.boxDataLengthPerBox;
   const slots: PcSlot[] = [];
   for (let s = 0; s < 30; s++) {
     const speciesId = storedSpecies(
@@ -287,7 +288,7 @@ export function getPcBox(
       speciesName: speciesId === null ? null : SPECIES[speciesId].name,
     });
   }
-  return { box: box + 1, currentBox: box === currentBox, slots };
+  return { box: index + 1, currentBox: index === currentIndex, slots };
 }
 
 export interface PcHit {
@@ -397,7 +398,7 @@ export function readRawRegion(
   return { offset, length, base64: encodeBase64(bytes) };
 }
 
-// ----------------------------- party audit ------------------------------
+// --------------------- encrypted record decoding ------------------------
 
 interface StatBlock {
   hp: number;
@@ -407,6 +408,182 @@ interface StatBlock {
   spa: number;
   spd: number;
 }
+
+type StatusConditionName = "slp" | "psn" | "brn" | "frz" | "par";
+
+const IV_SHIFT: Record<string, number> = {
+  hp: 0,
+  atk: 5,
+  def: 10,
+  spe: 15,
+  spa: 20,
+  spd: 25,
+};
+
+export interface DecodedPokemonRecord {
+  /** "party" = 236-byte battle-active record; "stored" = 136-byte PC record. */
+  kind: "party" | "stored";
+  empty: boolean;
+  /** Add16 checksum mismatch — fields are withheld rather than guessed. */
+  torn: boolean;
+  pid: number | null;
+  speciesId: number | null;
+  speciesName: string | null;
+  natureName: string;
+  heldItemId: number | null;
+  itemName: string | null;
+  moves: Array<string | null>;
+  ivs: StatBlock;
+  evs: StatBlock;
+  /** Party records only: battle-tail fields. */
+  level?: number;
+  hpCur?: number;
+  hpMax?: number;
+  statusCondition?: StatusConditionName | null;
+  statusDetail?: number | null;
+}
+
+function isAllBytes(record: Uint8Array, value: number): boolean {
+  for (const b of record) if (b !== value) return false;
+  return true;
+}
+
+function statBlocksFrom(image: Uint8Array): { ivs: StatBlock; evs: StatBlock } {
+  const ivWord = image[0x38]! |
+    (image[0x39]! << 8) |
+    (image[0x3a]! << 16) |
+    (image[0x3b]! << 24);
+  const ivs = Object.fromEntries(
+    Object.entries(IV_SHIFT).map(([k, shift]) => [k, (ivWord >>> shift) & 31]),
+  ) as unknown as StatBlock;
+  const evs = {
+    hp: image[0x18]!,
+    atk: image[0x19]!,
+    def: image[0x1a]!,
+    spe: image[0x1b]!,
+    spa: image[0x1c]!,
+    spd: image[0x1d]!,
+  };
+  return { ivs, evs };
+}
+
+function namedMoves(image: Uint8Array): Array<string | null> {
+  return [0, 1, 2, 3].map((m) => {
+    const id = image[0x28 + m * 2]! | (image[0x29 + m * 2]! << 8);
+    return id === 0 ? null : MOVES[id]?.name ?? null;
+  });
+}
+
+function emptyRecord(kind: "party" | "stored"): DecodedPokemonRecord {
+  return {
+    kind,
+    empty: true,
+    torn: false,
+    pid: null,
+    speciesId: null,
+    speciesName: null,
+    natureName: "",
+    heldItemId: null,
+    itemName: null,
+    moves: [null, null, null, null],
+    ivs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
+    evs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
+  };
+}
+
+function tornRecord(
+  base: Omit<DecodedPokemonRecord, "torn">,
+): DecodedPokemonRecord {
+  // Withhold every decoded field — a failed checksum means the bytes are
+  // untrustworthy, and guessed values are worse than none (ADR-0003).
+  return {
+    kind: base.kind,
+    empty: false,
+    torn: true,
+    pid: base.pid, // header is plaintext; safe to report
+    speciesId: null,
+    speciesName: null,
+    natureName: "",
+    heldItemId: null,
+    itemName: null,
+    moves: [null, null, null, null],
+    ivs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
+    evs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
+  };
+}
+
+/**
+ * Decrypt + decode one encrypted Pokémon record — the deterministic helper
+ * behind raw-first exploration of party/PC regions (ADR-0006). Accepts a
+ * base64 236-byte party record or 136-byte stored (PC box) record.
+ */
+export function decodePokemonRecord(
+  recordBase64: string,
+): DecodedPokemonRecord {
+  const bytes = decodeBase64(recordBase64);
+  if (bytes.length !== 236 && bytes.length !== 136) {
+    throw new RangeError(
+      "record must be base64 of a 236-byte party record or a 136-byte stored (PC box) record",
+    );
+  }
+  const kind: "party" | "stored" = bytes.length === 236 ? "party" : "stored";
+
+  if (isAllBytes(bytes, EMPTY_RECORD_BYTE) || isAllBytes(bytes, 0)) {
+    return emptyRecord(kind);
+  }
+
+  let image: Uint8Array;
+  if (kind === "party") {
+    image = decryptSlot(bytes, false); // XOR blocks+tail, then unshuffle
+  } else {
+    // stored records: body XOR only (no battle tail), then unshuffle
+    image = bytes.slice();
+    const checksumWord = image[0x06]! | (image[0x07]! << 8);
+    lcgXorRegion(image, 0x08, 0x88, checksumWord);
+    const storedPid = image[0x00]! |
+      (image[0x01]! << 8) |
+      (image[0x02]! << 16) |
+      (image[0x03]! << 24); // plaintext header
+    unshuffleBlocks(image, storedPid, 0x08);
+  }
+  const dv = new DataView(image.buffer);
+
+  const storedChecksum = dv.getUint16(0x06, true);
+  const computedChecksum = add16Checksum(image, 0x08, 0x88);
+  const pid = dv.getUint32(0x00, true);
+
+  const heldItemId = dv.getUint16(0x0a, true);
+  const base: Omit<DecodedPokemonRecord, "torn"> = {
+    kind,
+    empty: false,
+    pid,
+    speciesId: dv.getUint16(0x08, true),
+    speciesName: SPECIES[dv.getUint16(0x08, true)]?.name ?? null,
+    natureName: natureName(pid % 25),
+    heldItemId: heldItemId === 0 ? null : heldItemId,
+    itemName: heldItemId === 0
+      ? null
+      : (ITEMS as Record<string, string>)[String(heldItemId)] ?? null,
+    moves: namedMoves(image),
+    ...statBlocksFrom(image),
+  };
+
+  if (computedChecksum !== storedChecksum) return tornRecord(base);
+
+  const result: DecodedPokemonRecord = { ...base, torn: false };
+  if (kind === "stored") return result; // no battle tail in stored records
+
+  const statusWord = dv.getUint32(0x88, true);
+  const parsed = parseStatus(statusWord);
+  result.level = image[0x8c]!;
+  result.hpCur = dv.getUint16(0x8e, true);
+  result.hpMax = dv.getUint16(0x90, true);
+  result.statusCondition = parsed?.condition ?? null;
+  result.statusDetail = parsed?.detail ?? null;
+  return result;
+}
+
+// ----------------------------- party audit ------------------------------
 
 export interface PartyAuditMember {
   slot: number;
@@ -421,7 +598,7 @@ export interface PartyAuditMember {
   torn?: boolean;
 }
 
-const partyCountOffset = () => 0x9c; // party.partyCount anchor (offsets.ts)
+const PARTY_COUNT_OFFSET = 0x9c; // party.partyCount anchor (offsets.ts)
 
 function emptyMember(slot: number): PartyAuditMember {
   return {
@@ -429,23 +606,10 @@ function emptyMember(slot: number): PartyAuditMember {
     speciesName: null,
     level: null,
     natureName: "",
-    ivs: zeroStats(),
-    evs: zeroStats(),
+    ivs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
+    evs: { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 },
     moves: [null, null, null, null],
   };
-}
-
-const IV_SHIFT: Record<string, number> = {
-  hp: 0,
-  atk: 5,
-  def: 10,
-  spe: 15,
-  spa: 20,
-  spd: 25,
-};
-
-function zeroStats(): StatBlock {
-  return { hp: 0, atk: 0, def: 0, spe: 0, spa: 0, spd: 0 };
 }
 
 /** Party audit reads raw decrypted fields the curated tools don't expose:
@@ -455,10 +619,7 @@ function zeroStats(): StatBlock {
  * reported as a torn row instead of decoded garbage. */
 export function getPartyAudit(reader: SaveFileReader): PartyAuditMember[] {
   const out: PartyAuditMember[] = [];
-  const partyCount = Math.min(
-    6,
-    byte(reader, partyCountOffset()),
-  );
+  const partyCount = Math.min(6, byte(reader, PARTY_COUNT_OFFSET));
   for (let i = 0; i < 6; i++) {
     if (i >= partyCount) {
       out.push(emptyMember(i + 1));

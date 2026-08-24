@@ -95,36 +95,28 @@ Anything not covered by a scanner can be explored via `read_raw_region`
 
 ## What your client gets
 
-**Scanner tools** — decoded answers straight from the save file:
+**Three tools** over MCP plus pinnable **reference resources**:
 
-| Tool                | Answers                                             |
-| ------------------- | --------------------------------------------------- |
-| `get_trainer_card`  | Name, TID/SID, money, badge count, playtime         |
-| `get_badges`        | Badge case by gym order                             |
-| `get_bag`           | Every pouch with item names and quantities          |
-| `get_dex_summary`   | Seen/caught counts                                  |
-| `is_species_caught` | Caught verdict for a dex id or species name         |
-| `get_pc_box`        | One PC box decoded slot-by-slot (1-based numbering) |
-| `find_in_pc_box`    | Where a species is stored across all 18 boxes       |
-| `get_story_flags`   | Notable story-progress event flags                  |
-| `get_party_audit`   | Raw per-member IVs/EVs/nature/moves                 |
-| `read_raw_region`   | Raw bytes as base64 — hard cap 1024 B/call          |
-| `get_section_map`   | The machine-readable offset map itself              |
+| Tool                    | Purpose                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `read_raw_region`       | Raw save bytes as base64 — the exploration primitive (1 KB/call cap)                 |
+| `decode_pokemon_record` | Decrypt + decode encrypted Pokémon records (party 236 B / box 136 B), accepts arrays |
+| `get_save_info`         | Active partition, file size, capability limits                                       |
 
-**Reference resources** (`pkhex://reference/<name>`) — pinnable lookup tables
-(species, moves, items, abilities, natures), the rendered offset map, and a
-field guide teaching efficient save navigation.
+**Reference resources** (`pkhex://reference/<name>`): the offset map, a field
+guide teaching raw-first navigation (landmarks, worked gotchas), and lookup
+tables for species/moves/items/abilities/natures.
 
-Per Pokémon: species (+types), PID, level, current/max HP, status condition
-(slp/psn/brn/frz/par with counters), nature, held item, ability, four moves with
-PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer card:
-name, TID/SID, money, playtime, badges.
+The model explores with `read_raw_region`, consults guides and tables as needed,
+and feeds anything encrypted through `decode_pokemon_record`. This is
+deliberately open-ended: questions don't need a pre-built tool. Answers refresh
+every call — re-save in-game to update the underlying file.
 
-Answers refresh every tool call — re-save in-game to update the underlying file.
 Read-only and Platinum-US scoped: no save editing, no games beyond CPUE.
 Authoritative contracts: [docs/spec/v0.1.md](docs/spec/v0.1.md) ·
 [ADR-0003](docs/adr/0003-context-layer.md) ·
-[ADR-0004](docs/adr/0004-save-file-only.md).
+[ADR-0005](docs/adr/0005-no-external-decode-engine.md) ·
+[ADR-0006](docs/adr/0006-raw-first-surface.md).
 
 ## Desktop packaging (Windows tested-first)
 

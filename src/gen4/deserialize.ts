@@ -1,4 +1,3 @@
-import { decodeBase64 } from "@std/encoding";
 import { add16Checksum, decryptSlot } from "./crypto.ts";
 import { SPECIES } from "./data/species.ts";
 import { MOVES } from "./data/moves.ts";
@@ -48,7 +47,7 @@ export type SlotDecodeResult =
   | { status: "torn" };
 
 /** Gen IV status word -> contract vocabulary. */
-function parseStatus(word: number): {
+export function parseStatus(word: number): {
   condition: StatusCondition;
   detail: number | null;
 } | null {

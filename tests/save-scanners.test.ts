@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import { MOVES } from "../src/gen4/data/moves.ts";
 import { SaveFileReader } from "../src/gen4/save/reader.ts";
 import {
+  decodePokemonRecord,
   findInPcBox,
   getBadges,
   getBag,
@@ -26,6 +27,36 @@ const PARTITION = 0x40000;
 function moveNames(ids: number[]): Array<string | null> {
   return ids.map((id) => MOVES[id]?.name ?? null);
 }
+
+Deno.test("decode_pokemon_record decodes a party record with named fields", () => {
+  const { reader } = buildRichSave();
+  const slotBytes = reader.read(0xa0, 236);
+  const rec = decodePokemonRecord(btoa(String.fromCharCode(...slotBytes)));
+  assertEquals(rec.empty, false);
+  assertEquals(rec.kind, "party");
+  assertEquals(rec.speciesName, "Infernape");
+  assertEquals(rec.level, 32);
+  assertEquals(rec.natureName.length > 0, true);
+  assertEquals(rec.ivs.hp, 31);
+  assertEquals(rec.moves[0], "Flare Blitz");
+});
+
+Deno.test("decode_pokemon_record decodes a stored (PC box) record", () => {
+  const stored = makeEncryptedStoredRecord({ species: 77 });
+  const rec = decodePokemonRecord(btoa(String.fromCharCode(...stored)));
+  assertEquals(rec.empty, false);
+  assertEquals(rec.kind, "stored");
+  assertEquals(rec.speciesName, "Ponyta");
+});
+
+Deno.test("decode_pokemon_record flags torn records instead of decoding garbage", () => {
+  const { reader } = buildRichSave();
+  const slotBytes = reader.read(0xa0, 236);
+  slotBytes[0x20] ^= 0xff; // corrupt inside the checksummed region
+  const rec = decodePokemonRecord(btoa(String.fromCharCode(...slotBytes)));
+  assertEquals(rec.torn, true);
+  assertEquals(rec.speciesName, null);
+});
 
 Deno.test("read_raw_region returns base64 of the exact slot-relative window", () => {
   const { reader } = buildRichSave();

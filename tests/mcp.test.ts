@@ -1,21 +1,13 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { createApp } from "../src/app.ts";
-import { makeSave } from "./helpers/save-builder.ts";
+import { makeEncryptedPartySlot, makeSave } from "./helpers/save-builder.ts";
 
 const HOST = { host: "127.0.0.1:8941" };
 
-const SAVE_TOOL_NAMES = [
-  "get_section_map",
-  "get_trainer_card",
-  "get_badges",
-  "get_bag",
-  "get_dex_summary",
-  "is_species_caught",
-  "get_pc_box",
-  "find_in_pc_box",
-  "get_story_flags",
-  "get_party_audit",
+const RAW_FIRST_TOOL_NAMES = [
   "read_raw_region",
+  "decode_pokemon_record",
+  "get_save_info",
 ];
 
 const RESOURCE_URIS = [
@@ -91,7 +83,7 @@ async function handshake(
   return sessionId;
 }
 
-Deno.test("MCP handshake over /mcp advertises pkhex-mcp, all save tools, and reference resources", async () => {
+Deno.test("MCP handshake over /mcp advertises the raw-first tools and reference resources", async () => {
   const app = createApp({});
   const sessionId = await handshake(app);
 
@@ -99,7 +91,12 @@ Deno.test("MCP handshake over /mcp advertises pkhex-mcp, all save tools, and ref
   assertEquals(list.status, 200);
   const doc = await jsonBody(list);
   const names = doc.result.tools.map((t: { name: string }) => t.name);
-  for (const expected of SAVE_TOOL_NAMES) {
+  assertEquals(
+    names.length,
+    RAW_FIRST_TOOL_NAMES.length,
+    "unexpected extra tools",
+  );
+  for (const expected of RAW_FIRST_TOOL_NAMES) {
     assertEquals(names.includes(expected), true, `missing tool ${expected}`);
   }
 
@@ -114,86 +111,111 @@ Deno.test("MCP handshake over /mcp advertises pkhex-mcp, all save tools, and ref
   }
 });
 
-Deno.test("save scanners answer from PKHEX_SAVE_PATH and explain when unset", async () => {
-  // Happy path: synthetic save written to a temp file, wired via savePath.
-  const save = makeSave({ money: 91124, badges: 0b00000111 });
+Deno.test("raw-first workflow: raw window + record decode against a temp save", async () => {
+  // Synthetic active-half party slot 0: Infernape, known IVs/moves.
+  const member = makeEncryptedPartySlot({
+    species: 392,
+    moves: [394, 157, 339, 421],
+    ivs: { hp: 31, atk: 30, def: 29, spe: 28, spa: 27, spd: 26 },
+    level: 32,
+    hpCur: 100,
+    hpMax: 100,
+  });
+  const data = makeSave({ money: 91124 });
+  data.set(member.subarray(0, 236), 0x40000 + 0xa0);
+  // Re-stamp partition 1's General-footer CRC over the mutated block
+  // (CRC16-CCITT poly 0x1021, init 0xFFFF, MSB-first).
+  {
+    let crc = 0xffff;
+    for (let i = 0x40000; i < 0x40000 + 0xcf18; i++) {
+      crc ^= data[i]! << 8;
+      for (let bit = 0; bit < 8; bit++) {
+        crc = crc & 0x8000
+          ? ((crc << 1) ^ 0x1021) & 0xffff
+          : (crc << 1) & 0xffff;
+      }
+    }
+    new DataView(data.buffer).setUint16(0x40000 + 0xcf18 + 0x12, crc, true);
+  }
+  // CRC covers the mutated region only if written after — rebuild footer CRC:
+  // (makeSave already wrote footers, so re-stamp partition 1's CRC.)
+  {
+    let sum = 0;
+    for (let i = 0xcf18 - 0xcf18; i < 0xcf18; i += 2) {
+      sum += data[0x40000 + i]! | (data[0x40000 + i + 1]! << 8);
+    }
+    void sum;
+  }
+
   const tmp = await Deno.makeTempFile({ suffix: ".sav" });
-  await Deno.writeFile(tmp, save);
+  await Deno.writeFile(tmp, data);
   try {
     const app = createApp({ savePath: tmp });
     const sessionId = await handshake(app);
 
-    const res = await post(
+    // Raw window over the party record we planted.
+    const rawRes = await fetch(`file://${tmp}`);
+    const fileBytes = new Uint8Array(await rawRes.arrayBuffer());
+    const recordBytes = fileBytes.slice(0x40000 + 0xa0, 0x40000 + 0xa0 + 236);
+    let bin = "";
+    for (const b of recordBytes) bin += String.fromCharCode(b);
+    const recordB64 = btoa(bin);
+
+    const decoded = await post(
       app,
       sessionId,
       rpc(20, "tools/call", {
-        name: "get_trainer_card",
-        arguments: {},
+        name: "decode_pokemon_record",
+        arguments: { recordsBase64: [recordB64] },
       }),
     );
-    assertEquals(res.status, 200);
-    const doc = await jsonBody(res);
-    assertEquals(doc.result.isError ?? false, false);
-    const card = JSON.parse(doc.result.content[0].text);
-    assertEquals(card.playerName, "Ethan");
-    assertEquals(card.money, 91124);
-    assertEquals(card.badgeCount, 3);
+    assertEquals(decoded.status, 200);
+    const decodedDoc = await jsonBody(decoded);
+    assertEquals(decodedDoc.result.isError ?? false, false);
+    const rec = JSON.parse(decodedDoc.result.content[0].text).decoded[0];
+    assertEquals(rec.speciesName, "Infernape");
+    assertEquals(rec.level, 32);
+    assertEquals(rec.ivs.hp, 31);
 
-    const caught = await post(
+    const info = await post(
       app,
       sessionId,
       rpc(21, "tools/call", {
-        name: "is_species_caught",
-        arguments: { species: "Turtwig" },
+        name: "get_save_info",
+        arguments: {},
       }),
     );
-    const caughtDoc = await jsonBody(caught);
-    const verdict = JSON.parse(caughtDoc.result.content[0].text);
-    assertEquals(verdict.caught, false);
-    assertEquals(verdict.nationalDexId, 387);
-
-    const raw = await post(
-      app,
-      sessionId,
-      rpc(23, "tools/call", {
-        name: "read_raw_region",
-        arguments: { offset: 0x78, length: 4 },
-      }),
-    );
-    const rawDoc = await jsonBody(raw);
-    const region = JSON.parse(rawDoc.result.content[0].text);
-    assertEquals(region.offset, 0x78);
-    assertEquals(region.length, 4);
+    const infoDoc = await jsonBody(info);
+    const infoJson = JSON.parse(infoDoc.result.content[0].text);
+    assertEquals(infoJson.activePartition.index, 1);
   } finally {
     await Deno.remove(tmp).catch(() => {});
   }
+});
 
-  // Unconfigured: tool stays listed but explains the env var instead.
-  const app2 = createApp({});
-  const sid2 = await handshake(app2);
-  const res2 = await post(
-    app2,
-    sid2,
+Deno.test("unconfigured save explains PKHEX_SAVE_PATH", async () => {
+  const app = createApp({});
+  const sid = await handshake(app);
+  const res = await post(
+    app,
+    sid,
     rpc(22, "tools/call", {
-      name: "get_badges",
-      arguments: {},
+      name: "read_raw_region",
+      arguments: { offset: 0x78, length: 4 },
     }),
   );
-  const doc2 = await jsonBody(res2);
-  assertEquals(doc2.result.isError, true);
-  assertStringIncludes(doc2.result.content[0].text, "PKHEX_SAVE_PATH");
+  const doc = await jsonBody(res);
+  assertEquals(doc.result.isError, true);
+  assertStringIncludes(doc.result.content[0].text, "PKHEX_SAVE_PATH");
 });
 
 Deno.test("a fresh client can re-initialize against an already-initialized server", async () => {
   const app = createApp({});
 
-  // First client: full handshake plus a tool round-trip.
   const first = await handshake(app);
   const firstCall = await post(app, first, rpc(2, "tools/list"));
   assertEquals(firstCall.status, 200);
 
-  // Second client starts from scratch (no session header): a chat-app restart
-  // or a second tab must not require a server restart.
   const second = await handshake(app);
   const secondCall = await post(app, second, rpc(3, "tools/list"));
   assertEquals(secondCall.status, 200);
@@ -247,7 +269,7 @@ Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async 
         `handshake in: ${buf.slice(0, 400)}`,
       );
       assertEquals(
-        buf.includes('"get_party_audit"'),
+        buf.includes('"decode_pokemon_record"'),
         true,
         `tools in: ${buf.slice(-400)}`,
       );

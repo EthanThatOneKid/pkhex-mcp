@@ -116,7 +116,12 @@ the reader auto-selects the active half by General-block footer counters
 - The last dex-region byte often reads 0xFF (flash fill): popcounts must
   ignore species ids > 493 or every count inflates.
 - Slots beyond the live party count contain STALE data from former members;
-  scanners gate on party count for this reason.
+  gate on party count (byte @0x9C) before interpreting party slots.
+- Add16 checksums and PID-shuffled blocks mean raw party/box bytes are
+  meaningless without decoding — feed them to \`decode_pokemon_record\`
+  (accepts an array; use it batch-wise for whole boxes) instead of trying to
+  interpret ciphertext.
+- Box numbers are 1-based in-game; the storage byte is 0-indexed.
 - Add16 checksums and PID-shuffled blocks mean raw party/box bytes are
   meaningless without decoding — trust the scanner outputs.
 `;

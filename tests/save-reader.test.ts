@@ -1,8 +1,7 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import {
   compareCounters,
   crc16ccitt,
-  GENERAL_FOOTER_REL,
   PARTITION_SIZE,
   SaveFileReader,
 } from "../src/gen4/save/reader.ts";
