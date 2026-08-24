@@ -88,13 +88,15 @@ export const trainerCard: Record<string, OffsetEntry> = {
   otName: {
     offset: 0x68,
     type: "utf16[7]",
-    note: "Original trainer name, 16-byte field, null-terminated [PKHeX SAV4.cs Trainer1+0x00]",
+    note:
+      "Original trainer name, 16-byte field, null-terminated [PKHeX SAV4.cs Trainer1+0x00]",
     confidence: "verified",
   },
   tid: {
     offset: 0x78,
     type: "u16",
-    note: "Trainer ID; read back 1256 on reference save [PKHeX SAV4.cs Trainer1+0x10]",
+    note:
+      "Trainer ID; read back 1256 on reference save [PKHeX SAV4.cs Trainer1+0x10]",
     confidence: "verified",
   },
   sid: {
@@ -106,7 +108,8 @@ export const trainerCard: Record<string, OffsetEntry> = {
   money: {
     offset: 0x7c,
     type: "u32",
-    note: "Money, clamp display/validation to <=999_999 (read 91_124) [PKHeX SAV4.cs Trainer1+0x14]",
+    note:
+      "Money, clamp display/validation to <=999_999 (read 91_124) [PKHeX SAV4.cs Trainer1+0x14]",
     confidence: "verified",
   },
   gender: {
@@ -124,7 +127,8 @@ export const trainerCard: Record<string, OffsetEntry> = {
   badges: {
     offset: 0x82,
     type: "bitfield[8]",
-    note: "Gym badge bitmask, one bit per badge; see badges.badgeBitOrder [PKHeX SAV4.cs Badges]",
+    note:
+      "Gym badge bitmask, one bit per badge; see badges.badgeBitOrder [PKHeX SAV4.cs Badges]",
     confidence: "verified",
   },
   trainerSprite: {
@@ -136,7 +140,8 @@ export const trainerCard: Record<string, OffsetEntry> = {
   progressFlags: {
     offset: 0x85,
     type: "bitfield[2/8]",
-    note: "bit0 = Game Clear, bit1 = National Dex obtained; reads 0b00000000 mid-playthrough [PKHeX SAV4.cs ProgressFlags]",
+    note:
+      "bit0 = Game Clear, bit1 = National Dex obtained; reads 0b00000000 mid-playthrough [PKHeX SAV4.cs ProgressFlags]",
     confidence: "verified",
   },
   coins: {
@@ -166,13 +171,15 @@ export const trainerCard: Record<string, OffsetEntry> = {
   secondsToStart: {
     offset: 0x34,
     type: "u32",
-    note: "Seconds between starting the game and new-game confirm (AdventureInfo base 0) [PKHeX SAV4.cs AdventureInfo+0x34]",
+    note:
+      "Seconds between starting the game and new-game confirm (AdventureInfo base 0) [PKHeX SAV4.cs AdventureInfo+0x34]",
     confidence: "verified",
   },
   secondsToFame: {
     offset: 0x3c,
     type: "u32",
-    note: "Seconds until Hall of Fame entry; 0xFFFFFFFF until champion [PKHeX SAV4.cs AdventureInfo+0x3C]",
+    note:
+      "Seconds until Hall of Fame entry; 0xFFFFFFFF until champion [PKHeX SAV4.cs AdventureInfo+0x3C]",
     confidence: "verified",
   },
   rivalName: {
@@ -188,7 +195,8 @@ export const position: Record<string, OffsetEntry> = {
   mapHeaderId: {
     offset: 0x1280,
     type: "u16",
-    note: "Current map-header id (room level); 120 while standing in Pastoria City, live-cross-checked [PKHeX SAV4Pt.cs M]",
+    note:
+      "Current map-header id (room level); 120 while standing in Pastoria City, live-cross-checked [PKHeX SAV4Pt.cs M]",
     confidence: "verified",
   },
   xCoord: {
@@ -210,13 +218,15 @@ export const party: Record<string, OffsetEntry> = {
   partyCount: {
     offset: 0x9c,
     type: "u8",
-    note: "Live party size 0..6 (= General[Party-4] in PKHeX); read 6 [PKHeX SAV4.cs PartyCount]",
+    note:
+      "Live party size 0..6 (= General[Party-4] in PKHeX); read 6 [PKHeX SAV4.cs PartyCount]",
     confidence: "verified",
   },
   firstSlot: {
     offset: 0xa0,
     type: "partyRecord[6]",
-    note: "Six party records, stride 236 (0xEC) bytes; Gen IV party struct incl. level/status/HP block [PKHeX SAV4Pt.cs Party=0xA0; repo deserialize.ts SLOT_SIZE=236]",
+    note:
+      "Six party records, stride 236 (0xEC) bytes; Gen IV party struct incl. level/status/HP block [PKHeX SAV4Pt.cs Party=0xA0; repo deserialize.ts SLOT_SIZE=236]",
     confidence: "verified",
   },
 };
@@ -254,14 +264,62 @@ export const bag = {
   orderingRule:
     "Pairs occupy leading slots; empty slots are 0000-0000. The game compacts on pickup; scanners should walk pairs and stop treating count==0 as empty rather than end-of-pouch.",
   pockets: [
-    { name: "items", offset: 0x000, slotCapacity: 165, legalItemSlots: 162, maxStack: 999 },
-    { name: "keyItems", offset: 0x294, slotCapacity: 50, legalItemSlots: 40, maxStack: 1 },
-    { name: "tmsHms", offset: 0x35c, slotCapacity: 100, legalItemSlots: 100, maxStack: 99 },
-    { name: "mail", offset: 0x4ec, slotCapacity: 12, legalItemSlots: 12, maxStack: 999 },
-    { name: "medicine", offset: 0x51c, slotCapacity: 40, legalItemSlots: 38, maxStack: 999 },
-    { name: "berries", offset: 0x5bc, slotCapacity: 64, legalItemSlots: 64, maxStack: 999 },
-    { name: "balls", offset: 0x6bc, slotCapacity: 15, legalItemSlots: 15, maxStack: 999 },
-    { name: "battleItems", offset: 0x6f8, slotCapacity: 13, legalItemSlots: 13, maxStack: 99 },
+    {
+      name: "items",
+      offset: 0x000,
+      slotCapacity: 165,
+      legalItemSlots: 162,
+      maxStack: 999,
+    },
+    {
+      name: "keyItems",
+      offset: 0x294,
+      slotCapacity: 50,
+      legalItemSlots: 40,
+      maxStack: 1,
+    },
+    {
+      name: "tmsHms",
+      offset: 0x35c,
+      slotCapacity: 100,
+      legalItemSlots: 100,
+      maxStack: 99,
+    },
+    {
+      name: "mail",
+      offset: 0x4ec,
+      slotCapacity: 12,
+      legalItemSlots: 12,
+      maxStack: 999,
+    },
+    {
+      name: "medicine",
+      offset: 0x51c,
+      slotCapacity: 40,
+      legalItemSlots: 38,
+      maxStack: 999,
+    },
+    {
+      name: "berries",
+      offset: 0x5bc,
+      slotCapacity: 64,
+      legalItemSlots: 64,
+      maxStack: 999,
+    },
+    {
+      name: "balls",
+      offset: 0x6bc,
+      slotCapacity: 15,
+      legalItemSlots: 15,
+      maxStack: 999,
+    },
+    {
+      name: "battleItems",
+      offset: 0x6f8,
+      slotCapacity: 13,
+      legalItemSlots: 13,
+      maxStack: 99,
+    },
   ] as const satisfies ReadonlyArray<PouchEntry>,
   /**
    * Notes: slotCapacity = distance to next pouch / 4 (verified arithmetic);
@@ -298,23 +356,30 @@ export const dex = {
     "Species national-dex id n -> bit (n-1) of the region, LSB-first within each byte (byte[i>>3] >> (i&7)) & 1 [PKHeX Zukan4.cs GetRegionFlag]. Gender regions: 00 male-only-seen, 01 male-first, 10 female-first, 11 female-only.",
   terminatorByteCaveat:
     "Final byte (region+0x3f) of caught and seen regions read 0xff on the reference save (gender regions read 0x00). Popcounts must ignore indices >= 493: masking them turned 49->41 caught and 110->102 seen, exactly matching player truth.",
-  spindaPid: { offset: 0x104, type: "u32", note: "Spinda spot-shaping PID [PKHeX Zukan4.cs OFS_SPINDA]" },
+  spindaPid: {
+    offset: 0x104,
+    type: "u32",
+    note: "Spinda spot-shaping PID [PKHeX Zukan4.cs OFS_SPINDA]",
+  },
   formFlagsBase: {
     offset: 0x108,
     type: "bytes",
-    note: "Shellos/Gastrodon/Burmy/Wormadam form counters then 28 Unown form slots (+0x10c..0x127) [PKHeX Zukan4.cs OFS_FORM1]",
+    note:
+      "Shellos/Gastrodon/Burmy/Wormadam form counters then 28 Unown form slots (+0x10c..0x127) [PKHeX Zukan4.cs OFS_FORM1]",
     confidence: "inferred",
   },
   languageFlagsBase: {
     offset: 0x128,
     type: "bytes[0x1f4]",
-    note: "One byte per species, low 3 bits = languages seen (Pt layout) [PKHeX Zukan4.cs PokeDexLanguageFlags]",
+    note:
+      "One byte per species, low 3 bits = languages seen (Pt layout) [PKHeX Zukan4.cs PokeDexLanguageFlags]",
     confidence: "inferred",
   },
   ptFormExtrasBase: {
     offset: 0x31c,
     type: "u32+bytes",
-    note: "Rotom u32 form mask @+0x31c, Shaymin @+0x320, Giratina @+0x321 [PKHeX Zukan4.cs FormOffset2]",
+    note:
+      "Rotom u32 form mask @+0x31c, Shaymin @+0x320, Giratina @+0x321 [PKHeX Zukan4.cs FormOffset2]",
     confidence: "inferred",
   },
 } as const;
@@ -326,13 +391,15 @@ export const storage = {
   currentBox: {
     offset: 0x0,
     type: "u8",
-    note: "Currently-viewed box index 0..17; read 1 [PKHeX SAV4Sinnoh.cs CurrentBox]",
+    note:
+      "Currently-viewed box index 0..17; read 1 [PKHeX SAV4Sinnoh.cs CurrentBox]",
     confidence: "verified",
   },
   boxDataStart: {
     offset: 0x4,
     type: "pk4[18][30]",
-    note: "18 boxes x 30 slots x 136-byte encrypted-at-rest Gen IV stored records, no inter-box padding (0xFF0/box) [PKHeX SAV4Sinnoh.cs BOX_* consts]",
+    note:
+      "18 boxes x 30 slots x 136-byte encrypted-at-rest Gen IV stored records, no inter-box padding (0xFF0/box) [PKHeX SAV4Sinnoh.cs BOX_* consts]",
     confidence: "verified",
   },
   boxSlotStride: 136 as const,
@@ -346,13 +413,15 @@ export const storage = {
   boxWallpapers: {
     offset: 0x121b4,
     type: "u8 x18",
-    note: "Wallpaper id per box (Pt special wallpapers shifted +8) [PKHeX SAV4Pt.cs OFS_Wallpaper area]",
+    note:
+      "Wallpaper id per box (Pt special wallpapers shifted +8) [PKHeX SAV4Pt.cs OFS_Wallpaper area]",
     confidence: "verified",
   },
   boxFlags: {
     offset: 0x121c6,
     type: "bitfield",
-    note: "Box flags byte; also hosts Pt unlockable-wallpaper bits [PKHeX SAV4Sinnoh.cs BOX_FLAGS / SAV4Pt.cs GetWallpaperUnlocked]",
+    note:
+      "Box flags byte; also hosts Pt unlockable-wallpaper bits [PKHeX SAV4Sinnoh.cs BOX_FLAGS / SAV4Pt.cs GetWallpaperUnlocked]",
     confidence: "inferred",
   },
   locationNote:
@@ -367,19 +436,22 @@ export const storyFlags = {
   eventWorkBase: {
     offset: 0xdac,
     type: "u16[]",
-    note: "Event WORK array base; work i at base+2i (e.g., lottery work index 60) [PKHeX SAV4Pt.cs EventWork]",
+    note:
+      "Event WORK array base; work i at base+2i (e.g., lottery work index 60) [PKHeX SAV4Pt.cs EventWork]",
     confidence: "verified",
   },
   eventFlagBase: {
     offset: 0xfec,
     type: "bitfield[2912]",
-    note: "Event FLAG array; flag n lives at base+(n>>3), bit n&7, LSB-first. 0xB60 = 2912 flags total [PKHeX SAV4.cs EventFlagCount/GetEventFlag]",
+    note:
+      "Event FLAG array; flag n lives at base+(n>>3), bit n&7, LSB-first. 0xB60 = 2912 flags total [PKHeX SAV4.cs EventFlagCount/GetEventFlag]",
     confidence: "verified",
   },
   dexUpgradeBytes: {
     offset: 0x1640,
     type: "u8 x4",
-    note: "Pt dex upgrade markers: >=1 -> [0x1642], >=2 -> [0x1640], >=3 -> [0x1643], ==4 -> [0x1641] nonzero [PKHeX SAV4.cs DexUpgraded (Pt)]",
+    note:
+      "Pt dex upgrade markers: >=1 -> [0x1642], >=2 -> [0x1640], >=3 -> [0x1643], ==4 -> [0x1641] nonzero [PKHeX SAV4.cs DexUpgraded (Pt)]",
     confidence: "verified",
   },
   /**

@@ -5,12 +5,6 @@ import { MOVES } from "../src/gen4/data/moves.ts";
 import type { MoveInfo } from "../src/gen4/data/moves.ts";
 import { encodeSlot, type FixtureMember } from "./codec-fixture.ts";
 
-function toBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
 function ppMax(moveId: number, ups: number): number {
   const info: MoveInfo | undefined = MOVES[moveId];
   if (!info) return 1;
@@ -35,10 +29,7 @@ const FIXTURE: FixtureMember = {
 
 Deno.test("decodePartySlot round-trips an encoded member", () => {
   const slot = encodeSlot(FIXTURE);
-  const result = decodePartySlot(1, {
-    bytes: toBase64(slot),
-    decryptedInPlace: false,
-  });
+  const result = decodePartySlot(1, slot);
   assertEquals(result.status, "ok");
   if (result.status !== "ok") return;
   const m = result.member;
@@ -68,34 +59,20 @@ Deno.test("decodePartySlot round-trips an encoded member", () => {
   });
 });
 
-Deno.test("decryptedInPlace slots skip the XOR but still unshuffle", () => {
-  const slot = encodeSlot(FIXTURE, { alreadyEncrypted: true });
-  const result = decodePartySlot(1, {
-    bytes: toBase64(slot),
-    decryptedInPlace: true,
-  });
-  assertEquals(result.status, "ok");
-  if (result.status !== "ok") return;
-  assertEquals(result.member.speciesId, 392);
-  assertEquals(result.member.level, 64);
-});
+// NOTE: the old "decryptedInPlace slots skip the XOR" test was removed with
+// the live-sync descope — save-file party bytes are ALWAYS encrypted at
+// rest, so decodePartySlot no longer carries a decryptedInPlace input.
 
 Deno.test("species 0 decodes to empty", () => {
   const slot = encodeSlot({ ...FIXTURE, speciesId: 0 });
-  const result = decodePartySlot(1, {
-    bytes: toBase64(slot),
-    decryptedInPlace: false,
-  });
+  const result = decodePartySlot(1, slot);
   assertEquals(result.status, "empty");
 });
 
 Deno.test("a flipped block byte is detected as torn via Add16", () => {
   const slot = encodeSlot(FIXTURE);
   slot[0x20] ^= 0xff; // corrupt inside the block region
-  const result = decodePartySlot(1, {
-    bytes: toBase64(slot),
-    decryptedInPlace: false,
-  });
+  const result = decodePartySlot(1, slot);
   assertEquals(result.status, "torn");
 });
 
@@ -111,13 +88,14 @@ Deno.test("status word parses into contract vocabulary", () => {
   ];
   for (const [statusWord, kind, detail] of cases) {
     const slot = encodeSlot({ ...FIXTURE, statusWord });
-    const result = decodePartySlot(1, {
-      bytes: toBase64(slot),
-      decryptedInPlace: false,
-    });
+    const result = decodePartySlot(1, slot);
     assertEquals(result.status, "ok", `status word ${statusWord}`);
     if (result.status !== "ok") continue;
     assertEquals(result.member.statusCondition, kind, `kind for ${statusWord}`);
-    assertEquals(result.member.statusDetail, detail, `detail for ${statusWord}`);
+    assertEquals(
+      result.member.statusDetail,
+      detail,
+      `detail for ${statusWord}`,
+    );
   }
 });

@@ -5,17 +5,43 @@ import { MOVES } from "./data/moves.ts";
 import { ITEMS } from "./data/items.ts";
 import { ABILITIES } from "./data/abilities.ts";
 import { natureName } from "./data/natures.ts";
-import type {
-  GameState,
-  MoveSlot,
-  PartyMember,
-  StatusCondition,
-  SyncPayload,
-} from "./schemas.ts";
+
+/** Local replacements for the removed frozen-contract types (v0.2 descope). */
+type StatusCondition = "slp" | "psn" | "brn" | "frz" | "par";
+
+interface MoveSlot {
+  moveId: number;
+  moveName: string;
+  ppCur: number;
+  ppMax: number;
+}
+
+interface PartyMember {
+  slot: number;
+  pid: number;
+  speciesId: number;
+  speciesName: string;
+  types: string[];
+  level: number;
+  hpCur: number;
+  hpMax: number;
+  statusCondition: StatusCondition | null;
+  statusDetail: number | null;
+  natureName: string;
+  heldItemId: number | null;
+  itemName: string | null;
+  abilityName: string;
+  moves: Array<MoveSlot | null>;
+  stats: {
+    attack: number;
+    defense: number;
+    speed: number;
+    spAttack: number;
+    spDefense: number;
+  };
+}
 
 const MAX_SPECIES = 493; // Pt sanity gate (spec section 7)
-const SLOT_SIZE = 236;
-
 export type SlotDecodeResult =
   | { status: "ok"; member: PartyMember }
   | { status: "empty" }
@@ -30,7 +56,10 @@ function parseStatus(word: number): {
   if (sleep !== 0) return { condition: "slp", detail: sleep };
   if ((word & 0x08) !== 0) {
     const toxicCounter = (word >>> 8) & 0xff;
-    return { condition: "psn", detail: toxicCounter === 0 ? null : toxicCounter };
+    return {
+      condition: "psn",
+      detail: toxicCounter === 0 ? null : toxicCounter,
+    };
   }
   if ((word & 0x10) !== 0) return { condition: "brn", detail: null };
   if ((word & 0x20) !== 0) return { condition: "frz", detail: null };
@@ -42,41 +71,22 @@ function parseStatus(word: number): {
  * Decode one raw wire slot into a contract-exact PartyMember.
  * - species 0 => empty
  * - Add16 mismatch, out-of-universe species or level => torn (cache self-heals)
+ *
+ * v0.2 descope note: this decoder now serves the save-file party audit
+ * (`get_party_audit`) and codec round-trip tests only — live wire ingest
+ * was descoped (ADR-0004).
  */
 export function decodePartySlot(
   slotNumber: number,
-  raw: { bytes: string; decryptedInPlace: boolean },
+  slot: Uint8Array,
 ): SlotDecodeResult {
-  let slotBytes: Uint8Array;
-  try {
-    slotBytes = decodeBase64(raw.bytes);
-  } catch {
-    return { status: "torn" };
-  }
-  if (slotBytes.length !== SLOT_SIZE) return { status: "torn" };
-
-  // A fully zeroed slot is a VACATED slot: the Bridge script normalizes
-  // slots beyond the live party count (count byte @P1+0xD090) to zeros.
-  // Checked before decryption because XORing zeros would break the Add16
-  // gate and misreport emptiness as torn.
-  let allZero = true;
-  for (const b of slotBytes) {
-    if (b !== 0) {
-      allZero = false;
-      break;
-    }
-  }
-  if (allZero) return { status: "empty" };
-
-  const image = decryptSlot(slotBytes, raw.decryptedInPlace);
+  const image = decryptSlot(slot, false);
   const dv = new DataView(image.buffer);
 
-  const pid = dv.getUint32(0x00, true);
   const storedChecksum = dv.getUint16(0x06, true);
   const computedChecksum = add16Checksum(image, 0x08, 0x88);
   if (computedChecksum !== storedChecksum) return { status: "torn" };
 
-  // Logical Block A lives at abs 0x08 in the unshuffled image.
   const speciesId = dv.getUint16(0x08, true);
   if (speciesId === 0) return { status: "empty" };
   if (speciesId > MAX_SPECIES || !SPECIES[speciesId]) return { status: "torn" };
@@ -89,7 +99,7 @@ export function decodePartySlot(
   const hpCur = dv.getUint16(0x8e, true);
   const hpMax = dv.getUint16(0x90, true);
 
-  const moves: MoveSlot[] = [];
+  const moves: Array<MoveSlot | null> = [];
   for (let i = 0; i < 4; i++) {
     const moveId = dv.getUint16(0x28 + i * 2, true);
     if (moveId === 0) {
@@ -109,15 +119,14 @@ export function decodePartySlot(
 
   const statusWord = dv.getUint32(0x88, true);
   const parsed = parseStatus(statusWord);
-
-  const speciesInfo = SPECIES[speciesId]!;
+  const pid = dv.getUint32(0x00, true);
 
   const member: PartyMember = {
     slot: slotNumber,
     pid,
     speciesId,
-    speciesName: speciesInfo.name,
-    types: [...speciesInfo.types],
+    speciesName: SPECIES[speciesId]!.name,
+    types: [...SPECIES[speciesId]!.types],
     level,
     hpCur,
     hpMax,
@@ -138,33 +147,4 @@ export function decodePartySlot(
   };
 
   return { status: "ok", member };
-}
-
-/**
- * Decode a full six-slot wire snapshot into the GameState slots tuple.
- *
- * Enrichment-miss policy: an unknown MOVE id means the slot's data is
- * inconsistent with our known universe (moves are structurally load-bearing),
- * so the slot reports torn; unknown item/ability ids are cosmetic and
- * degrade to null / empty string per the frozen contract's nullability.
- *
- * Torn slots collapse to null here; the state cache (ticket #14) applies
- * last-known-good self-heal on top using per-slot granular results.
- */
-export function decodeSnapshotSlots(
-  raw: SyncPayload["slots"],
-): GameState["slots"] {
-  const out = [
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-  ] as unknown as GameState["slots"];
-  for (let i = 0; i < 6; i++) {
-    const result = decodePartySlot(i + 1, raw[i]!);
-    if (result.status === "ok") out[i] = result.member;
-  }
-  return out;
 }

@@ -1,7 +1,6 @@
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createMcpServer } from "../mcp/server.ts";
-import type { GameStateStore } from "../state/game-state.ts";
 
 /**
  * Mount the Streamable HTTP transport at /mcp.
@@ -12,10 +11,9 @@ import type { GameStateStore } from "../state/game-state.ts";
  */
 export function mountMcpHttp(
   app: OpenAPIHono,
-  store: GameStateStore,
   options: { savePath?: string } = {},
 ): void {
-  const server = createMcpServer(store, options);
+  const server = createMcpServer(options);
   const transport = new StreamableHTTPTransport();
   const ready = server.connect(transport);
   app.all("/mcp", async (c) => {

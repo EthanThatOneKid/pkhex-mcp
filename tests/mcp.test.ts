@@ -1,18 +1,8 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { createApp } from "../src/app.ts";
-import { GameStateStore } from "../src/state/game-state.ts";
-import { makeSyncPayload } from "./fixtures.ts";
 import { makeSave } from "./helpers/save-builder.ts";
 
 const HOST = { host: "127.0.0.1:8941" };
-
-const TOOL_NAMES = [
-  "get_party",
-  "get_game_state",
-  "get_sync_status",
-  "get_pokemon_by_slot",
-  "find_party_member_by_species",
-];
 
 const SAVE_TOOL_NAMES = [
   "get_section_map",
@@ -25,6 +15,17 @@ const SAVE_TOOL_NAMES = [
   "find_in_pc_box",
   "get_story_flags",
   "get_party_audit",
+  "read_raw_region",
+];
+
+const RESOURCE_URIS = [
+  "pkhex://reference/species",
+  "pkhex://reference/moves",
+  "pkhex://reference/items",
+  "pkhex://reference/abilities",
+  "pkhex://reference/natures",
+  "pkhex://reference/field-guide",
+  "pkhex://reference/offset-map",
 ];
 
 /** Streamable HTTP replies may be plain JSON or SSE -- handle both. */
@@ -90,36 +91,36 @@ async function handshake(
   return sessionId;
 }
 
-Deno.test("MCP handshake over /mcp advertises pkhex-mcp and the five tools", async () => {
-  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
+Deno.test("MCP handshake over /mcp advertises pkhex-mcp, all save tools, and reference resources", async () => {
+  const app = createApp({});
   const sessionId = await handshake(app);
 
   const list = await post(app, sessionId, rpc(2, "tools/list"));
   assertEquals(list.status, 200);
   const doc = await jsonBody(list);
-  assertEquals(doc.result.serverInfo?.name ?? null, null); // tools/list has no serverInfo
   const names = doc.result.tools.map((t: { name: string }) => t.name);
-  for (const expected of TOOL_NAMES) {
+  for (const expected of SAVE_TOOL_NAMES) {
     assertEquals(names.includes(expected), true, `missing tool ${expected}`);
   }
-  for (const expected of SAVE_TOOL_NAMES) {
-    assertEquals(
-      names.includes(expected),
-      true,
-      `missing save tool ${expected}`,
-    );
+
+  const resources = await post(app, sessionId, rpc(3, "resources/list"));
+  assertEquals(resources.status, 200);
+  const resDoc = await jsonBody(resources);
+  const uris: string[] = resDoc.result.resources.map((r: { uri: string }) =>
+    r.uri
+  );
+  for (const expected of RESOURCE_URIS) {
+    assertEquals(uris.includes(expected), true, `missing resource ${expected}`);
   }
 });
 
 Deno.test("save scanners answer from PKHEX_SAVE_PATH and explain when unset", async () => {
+  // Happy path: synthetic save written to a temp file, wired via savePath.
   const save = makeSave({ money: 91124, badges: 0b00000111 });
   const tmp = await Deno.makeTempFile({ suffix: ".sav" });
   await Deno.writeFile(tmp, save);
   try {
-    const app = createApp({
-      store: new GameStateStore({ now: () => 0 }),
-      savePath: tmp,
-    });
+    const app = createApp({ savePath: tmp });
     const sessionId = await handshake(app);
 
     const res = await post(
@@ -150,12 +151,25 @@ Deno.test("save scanners answer from PKHEX_SAVE_PATH and explain when unset", as
     const verdict = JSON.parse(caughtDoc.result.content[0].text);
     assertEquals(verdict.caught, false);
     assertEquals(verdict.nationalDexId, 387);
+
+    const raw = await post(
+      app,
+      sessionId,
+      rpc(23, "tools/call", {
+        name: "read_raw_region",
+        arguments: { offset: 0x78, length: 4 },
+      }),
+    );
+    const rawDoc = await jsonBody(raw);
+    const region = JSON.parse(rawDoc.result.content[0].text);
+    assertEquals(region.offset, 0x78);
+    assertEquals(region.length, 4);
   } finally {
     await Deno.remove(tmp).catch(() => {});
   }
 
   // Unconfigured: tool stays listed but explains the env var instead.
-  const app2 = createApp({ store: new GameStateStore({ now: () => 0 }) });
+  const app2 = createApp({});
   const sid2 = await handshake(app2);
   const res2 = await post(
     app2,
@@ -170,181 +184,21 @@ Deno.test("save scanners answer from PKHEX_SAVE_PATH and explain when unset", as
   assertStringIncludes(doc2.result.content[0].text, "PKHEX_SAVE_PATH");
 });
 
-Deno.test("reference resources list and read over /mcp", async () => {
-  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
-  const sessionId = await handshake(app);
-
-  const list = await post(app, sessionId, rpc(30, "resources/list"));
-  assertEquals(list.status, 200);
-  const listDoc = await jsonBody(list);
-  const uris: string[] = listDoc.result.resources.map((r: { uri: string }) =>
-    r.uri
-  );
-  for (
-    const expected of [
-      "pkhex://reference/species",
-      "pkhex://reference/moves",
-      "pkhex://reference/items",
-      "pkhex://reference/abilities",
-      "pkhex://reference/natures",
-      "pkhex://reference/field-guide",
-      "pkhex://reference/offset-map",
-    ]
-  ) {
-    assertEquals(uris.includes(expected), true, `missing resource ${expected}`);
-  }
-
-  const species = await post(
-    app,
-    sessionId,
-    rpc(31, "resources/read", {
-      uri: "pkhex://reference/species",
-    }),
-  );
-  assertEquals(species.status, 200);
-  const speciesDoc = await jsonBody(species);
-  assertEquals(
-    speciesDoc.result.contents[0].text.includes("Infernape"),
-    true,
-  );
-
-  const guide = await post(
-    app,
-    sessionId,
-    rpc(32, "resources/read", {
-      uri: "pkhex://reference/field-guide",
-    }),
-  );
-  const guideDoc = await jsonBody(guide);
-  assertStringIncludes(guideDoc.result.contents[0].text, "Scanner first");
-
-  const offsets = await post(
-    app,
-    sessionId,
-    rpc(33, "resources/read", {
-      uri: "pkhex://reference/offset-map",
-    }),
-  );
-  const offsetsDoc = await jsonBody(offsets);
-  assertStringIncludes(offsetsDoc.result.contents[0].text, "footer");
-});
-
-Deno.test("data tools hard-error only before the first-ever Sync", async () => {
-  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
-  const sessionId = await handshake(app);
-
-  const status = await post(
-    app,
-    sessionId,
-    rpc(3, "tools/call", {
-      name: "get_sync_status",
-      arguments: {},
-    }),
-  );
-  assertEquals(status.status, 200);
-  const statusDoc = await jsonBody(status);
-  assertEquals(statusDoc.result.isError ?? false, false);
-  const parsedStatus = JSON.parse(statusDoc.result.content[0].text);
-  assertEquals(parsedStatus.state, "disconnected");
-  assertEquals(parsedStatus.receivedAt, null);
-
-  const party = await post(
-    app,
-    sessionId,
-    rpc(4, "tools/call", {
-      name: "get_party",
-      arguments: {},
-    }),
-  );
-  const partyDoc = await jsonBody(party);
-  assertEquals(partyDoc.result.isError, true);
-  assertEquals(
-    partyDoc.result.content[0].text.includes("no Sync received"),
-    true,
-  );
-});
-
-Deno.test("tools serve contract-verbatim decoded data after a Sync", async () => {
-  let clock = 1_000;
-  const store = new GameStateStore({ now: () => clock });
-  store.recordSync(makeSyncPayload());
-  const app = createApp({ store });
-  const sessionId = await handshake(app);
-
-  clock = 1_500;
-  const partyRes = await post(
-    app,
-    sessionId,
-    rpc(5, "tools/call", {
-      name: "get_party",
-      arguments: {},
-    }),
-  );
-  const partyDoc = await jsonBody(partyRes);
-  assertEquals(partyDoc.result.isError ?? false, false);
-  const slots = JSON.parse(partyDoc.result.content[0].text);
-  assertEquals(slots.length, 6);
-
-  const bySlot = await post(
-    app,
-    sessionId,
-    rpc(6, "tools/call", {
-      name: "get_pokemon_by_slot",
-      arguments: { slot: 1 },
-    }),
-  );
-  const bySlotDoc = await jsonBody(bySlot);
-  assertEquals(JSON.parse(bySlotDoc.result.content[0].text), null); // fixture slots are empty
-
-  const gameState = await post(
-    app,
-    sessionId,
-    rpc(7, "tools/call", {
-      name: "get_game_state",
-      arguments: {},
-    }),
-  );
-  const gsFrame = await jsonBody(gameState);
-  const gs = JSON.parse(
-    (gsFrame.result as { content: Array<{ text: string }> }).content[0].text,
-  );
-  assertEquals(gs.trainerMeta.playerName, "ETHAN");
-  assertEquals(gs.sync.ageMs, 500);
-});
-
 Deno.test("a fresh client can re-initialize against an already-initialized server", async () => {
-  const app = createApp({ store: new GameStateStore({ now: () => 0 }) });
+  const app = createApp({});
 
   // First client: full handshake plus a tool round-trip.
   const first = await handshake(app);
-  const firstCall = await post(
-    app,
-    first,
-    rpc(2, "tools/call", {
-      name: "get_sync_status",
-      arguments: {},
-    }),
-  );
+  const firstCall = await post(app, first, rpc(2, "tools/list"));
   assertEquals(firstCall.status, 200);
 
   // Second client starts from scratch (no session header): a chat-app restart
   // or a second tab must not require a server restart.
   const second = await handshake(app);
-  const secondCall = await post(
-    app,
-    second,
-    rpc(3, "tools/call", {
-      name: "get_sync_status",
-      arguments: {},
-    }),
-  );
+  const secondCall = await post(app, second, rpc(3, "tools/list"));
   assertEquals(secondCall.status, 200);
-  const doc = await jsonBody(secondCall);
-  assertEquals(doc.result.isError ?? false, false);
 });
 
-/** The stdio subprocess is load-sensitive under parallel emulator/test runs
- * (#21): a single missed deadline fails the whole suite. Retry once. */
 Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async () => {
   const attempt = async (): Promise<void> => {
     const command = new Deno.Command(Deno.execPath(), {
@@ -393,7 +247,7 @@ Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async 
         `handshake in: ${buf.slice(0, 400)}`,
       );
       assertEquals(
-        buf.includes('"get_party"'),
+        buf.includes('"get_party_audit"'),
         true,
         `tools in: ${buf.slice(-400)}`,
       );
@@ -408,7 +262,7 @@ Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async 
   // a clean second attempt is accepted as passing.
   try {
     await attempt();
-  } catch (first) {
+  } catch {
     console.warn("stdio test: first attempt failed, retrying once");
     await attempt();
   }

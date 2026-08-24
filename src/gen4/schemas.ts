@@ -46,7 +46,14 @@ export const SyncPayloadSchema = z
   .object({
     trainerMeta: TrainerMetaSchema,
     /** Always length 6; emptiness is a decode-time verdict, not a wire one. */
-    slots: z.tuple([syncSlot, syncSlot, syncSlot, syncSlot, syncSlot, syncSlot]),
+    slots: z.tuple([
+      syncSlot,
+      syncSlot,
+      syncSlot,
+      syncSlot,
+      syncSlot,
+      syncSlot,
+    ]),
   })
   .openapi("SyncPayload");
 
@@ -91,7 +98,12 @@ export const PartyMemberSchema = z
     heldItemId: z.number().int().min(0).nullable(),
     itemName: z.string().nullable(),
     abilityName: z.string(),
-    moves: z.tuple([MoveSlotSchema, MoveSlotSchema, MoveSlotSchema, MoveSlotSchema]),
+    moves: z.tuple([
+      MoveSlotSchema,
+      MoveSlotSchema,
+      MoveSlotSchema,
+      MoveSlotSchema,
+    ]),
     stats: StatsSchema,
   })
   .openapi("PartyMember");

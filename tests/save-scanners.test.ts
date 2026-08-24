@@ -1,4 +1,5 @@
 import { assertEquals } from "@std/assert";
+import { MOVES } from "../src/gen4/data/moves.ts";
 import { SaveFileReader } from "../src/gen4/save/reader.ts";
 import {
   findInPcBox,
@@ -21,6 +22,10 @@ import {
 } from "./helpers/save-builder.ts";
 
 const PARTITION = 0x40000;
+
+function moveNames(ids: number[]): Array<string | null> {
+  return ids.map((id) => MOVES[id]?.name ?? null);
+}
 
 Deno.test("read_raw_region returns base64 of the exact slot-relative window", () => {
   const { reader } = buildRichSave();
@@ -154,7 +159,7 @@ Deno.test("party audit extracts IVs/EVs/nature from encrypted slots", () => {
   assertEquals(first.ivs.hp, 31);
   assertEquals(first.ivs.spe, 28);
   assertEquals(first.evs.spe, 20);
-  assertEquals(first.moveIds, [394, 157, 339, 421]);
+  assertEquals(first.moves, moveNames([394, 157, 339, 421]));
   // empty slots report cleanly
   assertEquals(audit[5].slot, 6);
   assertEquals(audit[5].speciesName, null);

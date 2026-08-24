@@ -10,8 +10,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { GameState, SyncHealth } from "../gen4/schemas.ts";
-import type { GameStateStore } from "../state/game-state.ts";
 import { SPECIES } from "../gen4/data/species.ts";
 import { SaveFileReader } from "../gen4/save/reader.ts";
 import {
@@ -42,32 +40,7 @@ function text(payload: string, isError = false) {
   };
 }
 
-function syncStatus(gs: GameState | null): {
-  state: SyncHealth["state"];
-  ageMs: number | null;
-  receivedAt: string | null;
-} {
-  if (gs === null) {
-    return { state: "disconnected", ageMs: null, receivedAt: null };
-  }
-  return {
-    state: gs.sync.state,
-    ageMs: gs.sync.ageMs,
-    receivedAt: gs.receivedAt,
-  };
-}
-
-const NO_SYNC = "no Sync received yet";
-
-function requireGame(gs: GameState | null): GameState {
-  if (gs === null) throw new Error(NO_SYNC);
-  return gs;
-}
-
-export function createMcpServer(
-  store: GameStateStore,
-  options: McpServerOptions = {},
-): McpServer {
+export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const server = new McpServer({ name: "pkhex-mcp", version: "0.1.0" });
   registerReferenceResources(server);
 
@@ -143,8 +116,8 @@ export function createMcpServer(
 
   server.tool(
     "get_pc_box",
-    "One PC storage box from the save file: 30 slots decoded to species (null when empty). Defaults to the currently-viewed box.",
-    { box: z.number().int().min(0).max(17).optional() },
+    "One PC storage box from the save file: 30 slots decoded to species (null when empty). Box numbers are 1-based like the game UI; defaults to the currently-viewed box.",
+    { box: z.number().int().min(1).max(18).optional() },
     withSave((r, args: { box?: number }) => getPcBox(r, args.box)),
   );
 
@@ -187,62 +160,6 @@ export function createMcpServer(
     withSave((r, args: { offset: number; length: number }) =>
       readRawRegion(r, args.offset, args.length)
     ),
-  );
-
-  // ---- live state pipeline (v0.1, unchanged) ----
-
-  server.tool(
-    "get_party",
-    "The player's Party: six slots of decoded Party Members (null when empty).",
-    {},
-    () => {
-      return text(JSON.stringify(requireGame(store.getGameState()).slots));
-    },
-  );
-
-  server.tool(
-    "get_game_state",
-    "Full Live State: Trainer Meta, Sync health, and the whole Party.",
-    {},
-    () => {
-      return text(JSON.stringify(requireGame(store.getGameState())));
-    },
-  );
-
-  server.tool(
-    "get_sync_status",
-    "Sync health verdict: live/stale/disconnected plus Snapshot age.",
-    {},
-    () => text(JSON.stringify(syncStatus(store.getGameState()))),
-  );
-
-  server.tool(
-    "get_pokemon_by_slot",
-    "One Party Member by slot number (1..6); null when the slot is empty.",
-    { slot: z.number().int().min(1).max(6) },
-    ({ slot }: { slot: number }) => {
-      const gs = requireGame(store.getGameState());
-      return text(JSON.stringify(gs.slots[slot - 1] ?? null));
-    },
-  );
-
-  server.tool(
-    "find_party_member_by_species",
-    "First Party Member matching a species id or display name; null when absent.",
-    { nameOrId: z.union([z.string(), z.number()]) },
-    ({ nameOrId }: { nameOrId: string | number }) => {
-      const gs = requireGame(store.getGameState());
-      const wanted = typeof nameOrId === "number"
-        ? nameOrId
-        : nameOrId.trim().toLowerCase();
-      const member = gs.slots.find((m) =>
-        m !== null &&
-        (typeof wanted === "number"
-          ? m.speciesId === wanted
-          : m.speciesName.toLowerCase() === wanted)
-      );
-      return text(JSON.stringify(member ?? null));
-    },
   );
 
   return server;

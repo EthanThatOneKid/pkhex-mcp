@@ -1,12 +1,11 @@
-/* pkhex-mcp Inspector polling + rendering (spec section 11).
- * Polls GET /state every 500ms, forever. Values flash on change; tabular
- * numerals keep layout from jumping. Torn slots that stay degraded for
- * >5s get an amber outline (degradation itself heals invisibly server-side).
+/* pkhex-mcp Inspector — save-file edition (post-descope).
+ * Polls GET /save/summary every 2s and renders the decoded save: trainer
+ * strip, per-member audit cards (IVs/EVs/nature/moves), dex chip. Values
+ * flash on change; tabular numerals keep layout stable.
  */
 "use strict";
 
-const POLL_MS = 500;
-const DEGRADED_TINT_AFTER_MS = 5000;
+const POLL_MS = 2000;
 
 const $ = (id) => document.getElementById(id);
 const grid = $("party-grid");
@@ -21,158 +20,102 @@ $("copy-snip").addEventListener("click", () => {
     const btn = $("copy-snip");
     const old = btn.textContent;
     btn.textContent = "Copied!";
-    setTimeout(() => (btn.textContent = old), 1200);
+    setTimeout(btn.textContent = old, 1200);
   });
 });
 
-let prevState = null; // last GameState for flash diffing
-/** slot index -> first-seen time of continuous degradation */
-const degradedSince = new Map();
+let prevState = null; // last summary for flash diffing
 
-function hpClass(cur, max) {
-  if (!max) return "";
-  const r = cur / max;
-  return r <= 0.25 ? "low" : r <= 0.5 ? "mid" : "";
-}
-
-function statusChip(member) {
-  if (!member || !member.statusCondition) return "";
-  const label = member.statusCondition.toUpperCase();
-  return `<span class="status-chip">${label}</span>`;
-}
-
-function render(state) {
+function render(summary) {
   // Trainer strip
-  const t = state.trainerMeta;
+  const t = summary.trainerCard;
   $("trainer-name").textContent = t.playerName;
   $("trainer-ids").textContent = `TID ${t.tid} / SID ${t.sid}`;
-  $("trainer-playtime").textContent =
-    `${t.playtime.hours}:${String(t.playtime.minutes).padStart(2, "0")} played`;
-  $("trainer-location").textContent = "📍 " + (t.locationName ?? `map ${t.mapId}`);
+  $("trainer-playtime").textContent = `${t.playtime.hours}:${
+    String(t.playtime.minutes).padStart(2, "0")
+  } played · $${t.money}`;
+  $("trainer-location").textContent = `🏅 ${t.badgeCount} badges`;
 
-  // Health strip (spec section 8 copy)
   const health = $("health");
   health.className = "";
-  if (state.sync.state === "live") {
-    health.textContent = "● LIVE";
-    health.classList.add("health-live");
-  } else if (state.sync.state === "stale") {
-    health.textContent = `● STALE · ${Math.round(state.sync.ageMs / 1000)}s`;
-    health.classList.add("health-stale");
-  } else {
-    renderDisconnected(health);
+  health.textContent = "● SAVE FILE";
+  health.classList.add("health-live");
+
+  const dexChip = $("dex-chip");
+  if (dexChip) {
+    dexChip.textContent =
+      `Dex: ${summary.dex.seen} seen / ${summary.dex.caught} caught`;
   }
 
-  // Party cards
+  // Party audit cards
   grid.innerHTML = "";
-  state.slots.forEach((member, i) => {
+  summary.partyAudit.forEach((member, i) => {
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.slot = String(i);
 
-    if (member === null) {
-      card.innerHTML = `<div class="placeholder">empty slot</div>`;
-      degradedSince.delete(i);
+    const prev = prevState?.partyAudit?.[i] ?? null;
+    const flashIf = (changed) => (changed ? "flash num" : "num");
+
+    if (member.speciesName === null) {
+      card.innerHTML = `<div class="placeholder">${
+        member.torn ? "⚠ torn slot" : "empty slot"
+      }</div>`;
       grid.appendChild(card);
       return;
     }
 
-    const prev = prevState?.slots?.[i] ?? null;
-    const flashIf = (changed) => (changed ? "flash num" : "num");
-
-    const types = member.types
-      .map((ty) => `<span class="type">${ty.toUpperCase()}</span>`)
-      .join("");
-    const hpPct = Math.max(0, Math.min(100, (100 * member.hpCur) / member.hpMax));
     const moves = member.moves
-      .map((mv) =>
-        mv === null
-          ? "<span></span>"
-          : `<span><b>${mv.moveName}</b><i class="num">${mv.ppCur}/${mv.ppMax}</i></span>`
-      )
+      .map((
+        mv,
+      ) => (mv === null ? "<span></span>" : `<span><b>${mv}</b></span>`))
       .join("");
-    const statKeys = [
-      ["ATK", "attack"],
-      ["DEF", "defense"],
-      ["SPA", "spAttack"],
-      ["SPD", "spDefense"],
-      ["SPE", "speed"],
-    ];
-    const statRow = statKeys
-      .map(([label, key]) => {
-        const changed = prev?.stats?.[key] !== member.stats[key];
-        return `<div><b class="${flashIf(changed)}">${member.stats[key]}</b>${label}</div>`;
-      })
-      .join("");
+    const ivRow = [
+      ["HP", member.ivs.hp],
+      ["ATK", member.ivs.atk],
+      ["DEF", member.ivs.def],
+      ["SPE", member.ivs.spe],
+      ["SPA", member.ivs.spa],
+      ["SPD", member.ivs.spd],
+    ].map(([label, v]) =>
+      `<div><b class="${
+        flashIf(prev?.ivs?.[label] !== v)
+      } num">${v}</b>${label}</div>`
+    ).join("");
+    const evRow = [
+      ["HP", member.evs.hp],
+      ["ATK", member.evs.atk],
+      ["DEF", member.evs.def],
+      ["SPE", member.evs.spe],
+    ].map(([label, v]) =>
+      `<div><b class="${
+        flashIf(prev?.evs?.[label] !== v)
+      } num">${v}</b>${label}EV</div>`
+    ).join("");
 
     card.innerHTML = `
-      <div class="top"><span class="name">${member.speciesName}</span>${types}<span class="lv num">Lv. ${member.level}</span></div>
-      <div class="hpline">
-        <span class="num ${flashIf(prev?.hpCur !== member.hpCur)}">${member.hpCur}</span>/<span class="num">${member.hpMax}</span>
-        <div class="hpbar ${hpClass(member.hpCur, member.hpMax)}"><i style="width:${hpct(hpPct)}%"></i></div>
-        ${statusChip(member)}
-      </div>
-      <div class="meta"><span>${member.natureName} nature</span>·<span class="item">◈ ${member.itemName ?? "—"}</span>·<span>${member.abilityName}</span></div>
-      <div class="moves">${moves}</div>
-      <div class="statsrow">${statRow}</div>`;
+      <div class="top"><span class="name">${member.speciesName}</span><span class="lv num">Lv. ${member.level}</span></div>
+      <div class="meta"><span>${member.natureName} nature</span>${
+      member.torn ? '<span class="status-chip">TORN</span>' : ""
+    }</div>
+      <div class="statsrow">${ivRow}</div>
+      <div class="statsrow">${evRow}</div>
+      <div class="moves">${moves}</div>`;
     grid.appendChild(card);
   });
 
-  prevState = state;
-}
-
-function hpct(pct) {
-  return pct.toFixed(1);
+  prevState = summary;
 }
 
 async function pollOnce() {
   try {
-    const res = await fetch("/state");
-    if (res.status === 503) {
-      renderDisconnected();
-      return;
-    }
-    if (res.ok) render(await res.json());
-  } catch {
-    renderDisconnected();
-  }
-}
-
-function renderDisconnected(healthEl = $("health")) {
-  healthEl.className = "";
-  healthEl.textContent = "● DISCONNECTED — start your emulator with the bridge script running";
-  healthEl.classList.add("health-disconnected");
-}
-
-async function pollIntegrity() {
-  try {
-    const res = await fetch("/debug/sync-integrity");
+    const res = await fetch("/save/summary");
     if (!res.ok) return;
-    const report = await res.json();
-    const now = Date.now();
-    for (const slot of report.lastSyncTornSlots) {
-      const idx = slot - 1;
-      if (!degradedSince.has(idx)) degradedSince.set(idx, now);
-    }
-    for (const [idx, since] of degradedSince) {
-      const card = grid.querySelector(`article[data-slot="${idx}"]`);
-      if (!card) {
-        degradedSince.delete(idx);
-        continue;
-      }
-      const isStillTorn = report.lastSyncTornSlots.includes(idx + 1);
-      if (!isStillTorn) {
-        degradedSince.delete(idx);
-        card.classList.remove("degraded");
-      } else if (now - since > DEGRADED_TINT_AFTER_MS) {
-        card.classList.add("degraded");
-      }
-    }
+    render(await res.json());
   } catch {
-    /* debug surface is best-effort */
+    /* transient */
   }
 }
 
 pollOnce();
 setInterval(pollOnce, POLL_MS);
-setInterval(pollIntegrity, POLL_MS);

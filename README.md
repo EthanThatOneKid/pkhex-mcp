@@ -1,15 +1,16 @@
 # pkhex-mcp
 
-Real-time, read-only visibility into a Pokémon Platinum play session — served
-over MCP so any AI chat client can reason about the game as it happens.
+Read-only analysis of a Pokémon Platinum save file — served over MCP so any AI
+chat client can answer open-ended questions about your game: badges, bag,
+Pokédex, PC boxes, IVs/EVs, story progress and more.
 
-Reads live emulator RAM via a BizHawk Lua bridge, decodes it in TypeScript
-(single authoritative decoder), and serves it three ways: an MCP server
-(Streamable HTTP + stdio), an OpenAPI-documented REST surface, and an embedded
-desktop Inspector UI.
+Decodes the save in TypeScript (single authoritative decoder), enriches it with
+generated lookup tables, and serves it three ways: an MCP server (Streamable
+HTTP + stdio), an OpenAPI-documented REST surface, and a local Inspector UI.
 
-- **Architecture**: [docs/adr/](docs/adr/) (ADR-0001 runtime/packaging, ADR-0002
-  BizHawk producer)
+- **Architecture**: [docs/adr/](docs/adr/) (ADR-0001 runtime, ADR-0002 BizHawk
+  producer [superseded by ADR-0004], ADR-0003 context layer, ADR-0004
+  save-file-only)
 - **Implementation spec**: [docs/spec/v0.1.md](docs/spec/v0.1.md)
 - **Vocabulary**: [CONTEXT.md](CONTEXT.md)
 
@@ -30,51 +31,40 @@ desktop Inspector UI.
 
   Other package managers (winget, scoop, Homebrew) are listed on that docs page.
 
-- [BizHawk](https://tasvideos.org/BizHawk/Releases) ≥ 2.11.1 — needed only to
-  connect your game; setup is covered in [bridge/README.md](bridge/README.md).
+- **Your Pokémon Platinum (US) save file** — any `.sav` copy works: BizHawk's
+  `NDS/SaveRAM/*.SaveRAM`, melonDS's `.sav`, DeSmuME's export. Answers reflect
+  the last in-game save.
 
 **From source** (prebuilt releases aren't published yet)
 
 ```sh
 git clone https://github.com/EthanThatOneKid/pkhex-mcp.git
 cd pkhex-mcp
-deno task start     # first run fetches dependencies automatically
 ```
 
-Verify: open <http://127.0.0.1:8941/> — the Inspector loads. `GET /state`
-answering `503` is expected until the Bridge connects (explained under
-[Quickstart](#quickstart-development)).
+## Quickstart
 
-Prebuilt `.msi` / `.dmg` / `.AppImage` artifacts can be built locally — see
-[Desktop packaging](#desktop-packaging-windows-tested-first).
-
-## Quickstart (development)
+```powershell
+# Windows (PowerShell) — point the server at your save file
+$env:PKHEX_SAVE_PATH = "C:\path\to\Pokemon - Platinum Version (USA) (Rev 1).SaveRAM"
+deno task start      # first run fetches dependencies automatically
+```
 
 ```sh
-deno task start          # server on http://127.0.0.1:8941 (loopback only)
+# macOS / Linux
+PKHEX_SAVE_PATH="/path/to/platinum.sav" deno task start
 ```
 
-| Surface                     | URL / mode                   |
-| --------------------------- | ---------------------------- |
-| Inspector UI                | <http://127.0.0.1:8941/>     |
-| MCP (Streamable HTTP)       | <http://127.0.0.1:8941/mcp>  |
-| MCP (stdio)                 | `deno task start -- --stdio` |
-| OpenAPI / Swagger           | `/doc` · `/swagger`          |
-| Debug: degradation counters | `/debug/sync-integrity`      |
-
-Until the Bridge script is connected, `GET /state` answers `503` and the MCP
-data tools report "no Sync received yet" — that's the designed pre-Sync state.
-
-## Connect your game (Platinum US)
-
-Follow **[bridge/README.md](bridge/README.md)**: install BizHawk 2.11.1+, open
-your Platinum ROM (BIOS/firmware dumps optional — Direct Boot works), and load
-`bridge/platinum-sync.lua` in the Lua Console. Your party appears in the
-Inspector within ~1 second.
-
-## Point an MCP client at it
+| Surface               | URL / mode                   |
+| --------------------- | ---------------------------- |
+| Inspector UI          | <http://127.0.0.1:8941/>     |
+| MCP (Streamable HTTP) | <http://127.0.0.1:8941/mcp>  |
+| MCP (stdio)           | `deno task start -- --stdio` |
+| OpenAPI / Swagger     | `/doc` · `/swagger`          |
 
 The server binds loopback only; use literal `127.0.0.1` URLs.
+
+## Point an MCP client at it
 
 | Client             | Transport       | Setup                                                                                                                           |
 | ------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,35 +76,40 @@ The server binds loopback only; use literal `127.0.0.1` URLs.
 | Gemini CLI         | Streamable HTTP | settings → `"mcpServers": { "pkhex": { "httpUrl": "http://127.0.0.1:8941/mcp" } }`                                              |
 | Claude Desktop     | stdio           | `mcpServers` → command launching this binary with `--stdio`, or bridge via [`mcp-remote`](https://github.com/geelen/mcp-remote) |
 
+## Try asking your client
+
+Paste-ready prompts — the model picks the tools:
+
+- _"What badges do I have?"_
+- _"What's in my bag?"_
+- _"What are my Pokedex seen and caught counts? Have I caught Rotom?"_
+- _"What's in my current PC box — which box number is it?"_
+- _"Where is my Ponyta stored — which box and slot?"_
+- _"Summarize my trainer card, including money."_
+- _"Which notable story flags are set?"_
+- _"What are Crobat's IVs, EVs and nature?"_
+- _"Compare my party members' speeds."_
+
+Anything not covered by a scanner can be explored via `read_raw_region`
+(hard-capped at 1024 bytes per call) plus the pinned reference tables.
+
 ## What your client gets
 
-Two families of tools over MCP (mirrored by REST under `/doc`):
+**Scanner tools** — decoded answers straight from the save file:
 
-**Live party** — refreshed from emulator RAM every ~500 ms while BizHawk runs:
-
-| Tool                           | Answers                                                   |
-| ------------------------------ | --------------------------------------------------------- |
-| `get_game_state`               | Full Live State: trainer meta, sync health, whole party   |
-| `get_party`                    | All six party slots (`null` when empty)                   |
-| `get_pokemon_by_slot`          | One member by slot 1–6                                    |
-| `find_party_member_by_species` | First member matching name or species id                  |
-| `get_sync_status`              | live (≤2 s) / stale (≤30 s) / disconnected + snapshot age |
-
-**Save-file scanners** — open-ended answers from the wired BizHawk SaveRAM copy
-(set `PKHEX_SAVE_PATH`; refreshes on every in-game save):
-
-| Tool                | Answers                                              |
-| ------------------- | ---------------------------------------------------- |
-| `get_trainer_card`  | Name, TID/SID, money, badge count, playtime          |
-| `get_badges`        | Badge case by gym order                              |
-| `get_bag`           | Every pouch with item names and quantities           |
-| `get_dex_summary`   | Seen/caught counts                                   |
-| `is_species_caught` | Caught verdict for a dex id or species name          |
-| `get_pc_box`        | One PC box decoded slot-by-slot                      |
-| `find_in_pc_box`    | Where a species is stored across all 18 boxes        |
-| `get_story_flags`   | Notable story-progress event flags                   |
-| `get_party_audit`   | Raw per-member IVs/EVs/nature/moves beyond live sync |
-| `get_section_map`   | The machine-readable offset map itself               |
+| Tool                | Answers                                             |
+| ------------------- | --------------------------------------------------- |
+| `get_trainer_card`  | Name, TID/SID, money, badge count, playtime         |
+| `get_badges`        | Badge case by gym order                             |
+| `get_bag`           | Every pouch with item names and quantities          |
+| `get_dex_summary`   | Seen/caught counts                                  |
+| `is_species_caught` | Caught verdict for a dex id or species name         |
+| `get_pc_box`        | One PC box decoded slot-by-slot (1-based numbering) |
+| `find_in_pc_box`    | Where a species is stored across all 18 boxes       |
+| `get_story_flags`   | Notable story-progress event flags                  |
+| `get_party_audit`   | Raw per-member IVs/EVs/nature/moves                 |
+| `read_raw_region`   | Raw bytes as base64 — hard cap 1024 B/call          |
+| `get_section_map`   | The machine-readable offset map itself              |
 
 **Reference resources** (`pkhex://reference/<name>`) — pinnable lookup tables
 (species, moves, items, abilities, natures), the rendered offset map, and a
@@ -122,12 +117,14 @@ field guide teaching efficient save navigation.
 
 Per Pokémon: species (+types), PID, level, current/max HP, status condition
 (slp/psn/brn/frz/par with counters), nature, held item, ability, four moves with
-PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer meta:
-name, TID/SID, playtime, current map id.
+PP-Up-aware current/max PP, battle stats (atk·def·spe·spa·spd). Trainer card:
+name, TID/SID, money, playtime, badges.
 
-Read-only and Platinum-US scoped: no save editing, no games beyond CPUE (v0.2
-scope). Authoritative contracts: [docs/spec/v0.1.md](docs/spec/v0.1.md) ·
-[ADR-0003](docs/adr/0003-context-layer.md) · machine-readable schema at `/doc`.
+Answers refresh every tool call — re-save in-game to update the underlying file.
+Read-only and Platinum-US scoped: no save editing, no games beyond CPUE.
+Authoritative contracts: [docs/spec/v0.1.md](docs/spec/v0.1.md) ·
+[ADR-0003](docs/adr/0003-context-layer.md) ·
+[ADR-0004](docs/adr/0004-save-file-only.md).
 
 ## Desktop packaging (Windows tested-first)
 
@@ -147,16 +144,9 @@ macOS/Linux builds are emitted but untested tiers.
 ```sh
 deno task check   # typecheck
 deno task lint    # lint
-deno task test    # full suite (48 tests)
+deno task test    # full suite
 deno task desktop # run inside a desktop window with HMR
 ```
-
-Optional local smoke against a running server + BizHawk:
-`PKHEX_LOCAL_SMOKE=1 deno test tests/local-smoke.test.ts` (inert otherwise).
-
-Wire debugging: start the server with `PKHEX_SYNC_TRACE=1` to log every `/sync`
-request (and any schema-rejection detail) to `logs/sync-incoming.log`;
-`recordSync` failures always land in `logs/sync-errors.log`.
 
 No copyrighted game data ever lives in this repository — all test fixtures are
 synthetic, built field-by-field.

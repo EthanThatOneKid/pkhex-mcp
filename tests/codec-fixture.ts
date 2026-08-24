@@ -13,15 +13,40 @@
 import type { Stats } from "../src/gen4/schemas.ts";
 
 const SHUFFLE = [
-  "ABCD", "ABDC", "ACBD", "ACDB", "ADBC", "ADCB",
-  "BACD", "BADC", "BCAD", "BCDA", "BDAC", "BDCA",
-  "CABD", "CADB", "CBAD", "CBDA", "CDAB", "CDBA",
-  "DABC", "DACB", "DBAC", "DBCA", "DCAB", "DCBA",
+  "ABCD",
+  "ABDC",
+  "ACBD",
+  "ACDB",
+  "ADBC",
+  "ADCB",
+  "BACD",
+  "BADC",
+  "BCAD",
+  "BCDA",
+  "BDAC",
+  "BDCA",
+  "CABD",
+  "CADB",
+  "CBAD",
+  "CBDA",
+  "CDAB",
+  "CDBA",
+  "DABC",
+  "DACB",
+  "DBAC",
+  "DBCA",
+  "DCAB",
+  "DCBA",
 ] as const;
 
 const BLOCK_SIZE = 32;
 
-function lcgXor(bytes: Uint8Array, start: number, end: number, seed: number): void {
+function lcgXor(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  seed: number,
+): void {
   for (let i = start; i < end; i += 2) {
     seed = (Math.imul(0x41c64e6d, seed) + 0x6073) >>> 0;
     const word = bytes[i]! | (bytes[i + 1]! << 8);
@@ -81,8 +106,8 @@ function plaintext(member: FixtureMember) {
     b[0x0c + i] = ups;
   });
   // IV bitfield abs 0x38 -> block offset 0x10
-  const ivWord =
-    (31 << 0) | (13 << 5) | (25 << 10) | (12 << 15) | (30 << 20) | (7 << 25);
+  const ivWord = (31 << 0) | (13 << 5) | (25 << 10) | (12 << 15) | (30 << 20) |
+    (7 << 25);
   dvB.setUint32(0x10, ivWord, true);
 
   // Tail (abs 0x88..0xEB, 100 bytes)
@@ -103,7 +128,10 @@ function plaintext(member: FixtureMember) {
   ];
   statOrder.forEach((s, i) => dvT.setUint16(0x0a + i * 2, s, true)); // abs 0x92..
 
-  return { blocks: [a, b, new Uint8Array(BLOCK_SIZE), new Uint8Array(BLOCK_SIZE)], tail };
+  return {
+    blocks: [a, b, new Uint8Array(BLOCK_SIZE), new Uint8Array(BLOCK_SIZE)],
+    tail,
+  };
 }
 
 /**
@@ -148,4 +176,3 @@ export function encodeSlot(
 
   return slot;
 }
-

@@ -2,17 +2,15 @@ import { createApp } from "./app.ts";
 import { createMcpServer } from "./mcp/server.ts";
 import { connectStdio } from "./mcp/stdio.ts";
 import { resolveServeTarget } from "./serve-target.ts";
-import { GameStateStore } from "./state/game-state.ts";
 
-const store = new GameStateStore();
 const savePath = Deno.env.get("PKHEX_SAVE_PATH") ?? undefined;
 
 if (Deno.args.includes("--stdio")) {
   // stdout belongs to MCP framing; keep all logging on stderr.
   console.error("pkhex-mcp stdio mode");
-  await connectStdio(createMcpServer(store, { savePath }));
+  await connectStdio(createMcpServer({ savePath }));
 } else {
-  const app = createApp({ store, savePath });
+  const app = createApp({ savePath });
   const envObject = (Deno.env as unknown as {
     toObject?: () => Record<string, string>;
   }).toObject?.() ?? {};

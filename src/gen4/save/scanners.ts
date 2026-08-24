@@ -415,7 +415,8 @@ export interface PartyAuditMember {
   natureName: string;
   ivs: StatBlock;
   evs: StatBlock;
-  moveIds: Array<number | null>;
+  /** Resolved move names; null entries are empty move slots. */
+  moves: Array<string | null>;
   /** True when the slot failed its Add16 checksum (stale/mid-write data). */
   torn?: boolean;
 }
@@ -430,7 +431,7 @@ function emptyMember(slot: number): PartyAuditMember {
     natureName: "",
     ivs: zeroStats(),
     evs: zeroStats(),
-    moveIds: [null, null, null, null],
+    moves: [null, null, null, null],
   };
 }
 
@@ -489,9 +490,9 @@ export function getPartyAudit(reader: SaveFileReader): PartyAuditMember[] {
       spd: image[0x1d]!,
     };
     const pid = dv.getUint32(0x00, true);
-    const moveIds = [0, 1, 2, 3].map((m) => {
+    const moves = [0, 1, 2, 3].map((m) => {
       const id = dv.getUint16(0x28 + m * 2, true);
-      return id === 0 ? null : id;
+      return id === 0 ? null : MOVES[id]?.name ?? null;
     });
     out.push({
       slot: i + 1,
@@ -500,7 +501,7 @@ export function getPartyAudit(reader: SaveFileReader): PartyAuditMember[] {
       natureName: natureName(pid % 25),
       ivs,
       evs,
-      moveIds,
+      moves,
     });
   }
   return out;
