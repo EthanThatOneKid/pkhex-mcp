@@ -8,7 +8,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SaveFileReader } from "../gen4/save/reader.ts";
-import { decodePokemonRecord, readRawRegion } from "../gen4/save/scanners.ts";
+import {
+  decodePokemonRecord,
+  getPcBox,
+  readRawRegion,
+} from "../gen4/save/scanners.ts";
 import { registerReferenceResources } from "./resources.ts";
 
 export interface McpServerOptions {
@@ -82,6 +86,13 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       activePartition: r.slot,
       capabilities: { maxRawRegionBytes: 1024 },
     })),
+  );
+
+  server.tool(
+    "decode_pc_box",
+    "One PC storage box decoded slot-by-slot (species per 136-byte record). Box numbers are 1-based like the game UI; defaults to the currently-viewed box.",
+    { box: z.number().int().min(1).max(18).optional() },
+    withSave((r, args: { box?: number }) => getPcBox(r, args.box)),
   );
 
   return server;

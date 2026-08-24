@@ -7,6 +7,7 @@ const HOST = { host: "127.0.0.1:8941" };
 const RAW_FIRST_TOOL_NAMES = [
   "read_raw_region",
   "decode_pokemon_record",
+  "decode_pc_box",
   "get_save_info",
 ];
 
