@@ -10,7 +10,7 @@
     "fmt": "deno fmt",
     "test": "deno test --allow-read --allow-write --allow-run --allow-env",
     "desktop": "deno desktop --hmr src/main.ts",
-    "build:win": "deno desktop --compress=xz --target x86_64-pc-windows-msvc",
+    "build:win": "deno desktop --compress=xz --entrypoint=src/main.ts --target x86_64-pc-windows-msvc",
     "build:macos": "deno desktop --compress=xz --target aarch64-apple-darwin",
     "build:linux": "deno desktop --compress=xz --target x86_64-unknown-linux-gnu"
   },
