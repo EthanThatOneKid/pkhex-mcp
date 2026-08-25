@@ -1,6 +1,6 @@
 {
   "lock": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "nodeModulesDir": "auto",
   "tasks": {
     "dev": "deno run -A --watch src/main.ts",
@@ -26,7 +26,9 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-explicit-any"]
+      "exclude": [
+        "no-explicit-any"
+      ]
     }
   },
   "desktop": {
@@ -36,9 +38,9 @@
     },
     "backend": "cef",
     "output": {
-      "windows": "./dist/pkhex-mcp-v0.1.0-windows.msi",
-      "macos": "./dist/pkhex-mcp-v0.1.0-macos.dmg",
-      "linux": "./dist/pkhex-mcp-v0.1.0-linux.AppImage"
+      "windows": "./dist/pkhex-mcp-v0.3.0-windows.msi",
+      "macos": "./dist/pkhex-mcp-v0.3.0-macos.dmg",
+      "linux": "./dist/pkhex-mcp-v0.3.0-linux.AppImage"
     }
   }
 }

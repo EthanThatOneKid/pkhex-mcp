@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build desktop MSI
+        run: deno task build:win
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkhex-mcp-windows
+          path: dist/*.msi
+
+      - name: Create release with MSI
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.msi
+          generate_release_notes: true
