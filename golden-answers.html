@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>pkhex-mcp — Golden Answers</title>
+    <style>
+    :root {
+      color-scheme: dark;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 1.3rem;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: .5rem;
+    }
+    h2 {
+      font-size: 1rem;
+      color: #58a6ff;
+      margin-top: 1.5rem;
+      margin-bottom: .25rem;
+    }
+    label {
+      display: block;
+      margin-top: .5rem;
+      font-size: .85rem;
+      color: #8b949e;
+    }
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: .4rem .6rem;
+      margin-top: .15rem;
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: .9rem;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    .row {
+      display: flex;
+      gap: .75rem;
+    }
+    .row > * {
+      flex: 1;
+    }
+    .checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: .35rem;
+    }
+    .checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      background: #161b22;
+      padding: .3rem .7rem;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #c9d1d9;
+    }
+    .checks input[type="checkbox"] {
+      accent-color: #58a6ff;
+    }
+    button {
+      padding: .5rem 1.2rem;
+      margin-top: 1rem;
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: .95rem;
+    }
+    button:hover {
+      background: #2ea043;
+    }
+    .hint {
+      font-size: .78rem;
+      color: #484f58;
+      margin-top: .15rem;
+    }
+    fieldset {
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: .75rem 1rem;
+      margin-top: .75rem;
+    }
+    legend {
+      color: #8b949e;
+      font-size: .82rem;
+      padding: 0 .4rem;
+    }
+    </style>
+  </head>
+  <body>
+    <h1>Golden Answers — Battery v0.3</h1>
+    <p
+      class="hint">Fill this out <strong>before</strong> looking at any tool output.
+Save the JSON and share it with the agent for grading.</p>
+
+    <h2>Q1 · Badge case</h2>
+    <fieldset>
+      <div class="checks" id="badges"></div>
+    </fieldset>
+
+    <h2>Q2 · Bag</h2>
+    <p
+      class="hint">One line per item: <code>Item Name × Quantity</code>. Only items you're certain about.</p>
+    <textarea id="bag" rows="5"
+      placeholder="Repel ×2&#10;Antidote ×7&#10;Poké Ball ×30"></textarea>
+
+    <h2>Q3 · Pokédex</h2>
+    <div class="row">
+      <div><label>Seen</label><input type="number" id="dex-seen" placeholder="102"></div>
+      <div><label>Caught</label><input type="number" id="dex-caught" placeholder="41"></div>
+      <div><label>Has-caught species (name)</label><input type="text" id="dex-species" placeholder="Ponyta"></div>
+    </div>
+
+    <h2>Q4 · PC Box</h2>
+    <div class="row">
+      <div><label>Box number (in-game)</label><input type="number" id="pc-box-num" min="1" max="18" placeholder="2"></div>
+    </div>
+    <textarea id="pc-contents" rows="3"
+      placeholder="Rhyhorn&#10;Wingull"></textarea>
+    <p
+      class="hint">Species currently in the viewed box, one per line from slot 1.</p>
+
+    <h2>Q5 · Trainer Card</h2>
+    <div class="row">
+      <div><label>Money</label><input type="number" id="money" placeholder="91124"></div>
+      <div><label>Playtime hours</label><input type="number" id="playtime-h" placeholder="61"></div>
+    </div>
+
+    <h2>Q6 · Non-Battery Probe</h2>
+    <label>Pick one:</label>
+    <select id="probe-type">
+      <option value="">— choose —</option>
+      <option value="mail">What mail is in my PC?</option>
+      <option value="daycare">Is my Daycare empty?</option>
+      <option value="pokerus">Does any party member have Pokérus?</option>
+    </select>
+    <label>Your answer</label>
+    <input type="text" id="probe-answer"
+      placeholder="Describe what you see on screen">
+
+    <h2>Q7 · Party Audit (spot check)</h2>
+    <div class="row">
+      <div><label>Slot 1 species</label><input type="text" id="p1-species" placeholder="Crobat"></div>
+      <div><label>Nature</label><input type="text" id="p1-nature" placeholder="Mild"></div>
+    </div>
+
+    <h2>Q8 · Slot Lookup Target</h2>
+    <label>Species to find in PC storage</label>
+    <input type="text" id="lookup-target" placeholder="Wingull">
+
+    <button id="save">💾 Download golden-answers.json</button>
+
+    <script>
+    "use strict";
+
+    const BADGES = [
+      "Coal",
+      "Forest",
+      "Cobble",
+      "Fen",
+      "Relic",
+      "Mine",
+      "Icicle",
+      "Beacon",
+    ];
+    const badgeDiv = document.getElementById("badges");
+    for (const b of BADGES) {
+      const label = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = b;
+      cb.dataset.badge = b;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(b));
+      badgeDiv.appendChild(label);
+    }
+
+    document.getElementById("save").addEventListener("click", () => {
+      const val = (id) => document.getElementById(id).value.trim();
+      const num = (id) => {
+        const v = val(id);
+        return v === "" ? null : Number(v);
+      };
+
+      const badges = Array.from(
+        badgeDiv.querySelectorAll("input:checked"),
+      ).map((cb) => cb.dataset.badge);
+
+      const bagLines = val("bag").split("\n").filter(Boolean);
+      const bag = bagLines.map((line) => {
+        const match = line.match(/^(.+?)\s*[×x]\s*(\d+)$/);
+        return match
+          ? { name: match[1].trim(), count: Number(match[2]) }
+          : { name: line.trim(), count: null };
+      });
+
+      const golden = {
+        capturedAt: new Date().toISOString(),
+        badges: {
+          earned: badges,
+          count: badges.length,
+        },
+        bagHighlights: bag,
+        dex: {
+          seen: num("dex-seen"),
+          caught: num("dex-caught"),
+          hasCaughtSpecies: val("dex-species") || null,
+        },
+        pcBox: {
+          boxNumber: num("pc-box-num"),
+          contents: val("pc-contents")
+            ? val("pc-contents").split("\n").map((s) => s.trim()).filter(Boolean)
+            : [],
+        },
+        trainerCard: {
+          money: num("money"),
+          playtimeHours: num("playtime-h"),
+        },
+        nonBatteryProbe: {
+          type: val("probe-type") || null,
+          answer: val("probe-answer") || null,
+        },
+        partySpotCheck: {
+          slot1Species: val("p1-species") || null,
+          slot1Nature: val("p1-nature") || null,
+        },
+        slotLookupTarget: val("lookup-target") || null,
+      };
+
+      const blob = new Blob([JSON.stringify(golden, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "golden-answers.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    </script>
+  </body>
+</html>
