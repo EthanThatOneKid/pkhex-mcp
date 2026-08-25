@@ -8,8 +8,24 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            task: deno desktop --compress=xz --target x86_64-pc-windows-msvc src/main.ts
+            artifact-name: pkhex-mcp-windows
+            artifact-pattern: dist/*.msi
+          - os: macos-latest
+            task: deno desktop --compress=xz --target aarch64-apple-darwin src/main.ts
+            artifact-name: pkhex-mcp-macos
+            artifact-pattern: dist/*.dmg
+          - os: ubuntu-latest
+            task: deno desktop --compress=xz --target x86_64-unknown-linux-gnu src/main.ts
+            artifact-name: pkhex-mcp-linux
+            artifact-pattern: dist/*.AppImage
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -17,17 +33,28 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Build desktop MSI
-        run: deno task build:win
+      - name: Build desktop app
+        run: ${{ matrix.task }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pkhex-mcp-windows
-          path: dist/*.msi
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-pattern }}
+          if-no-files-found: error
 
-      - name: Create release with MSI
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create release with all artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.msi
+          files: |
+            pkhex-mcp-windows/*.msi
+            pkhex-mcp-macos/*.dmg
+            pkhex-mcp-linux/*.AppImage
           generate_release_notes: true
