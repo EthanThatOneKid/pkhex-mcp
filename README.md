@@ -93,6 +93,27 @@ Paste-ready prompts — the model picks the tools:
 Anything not covered by a scanner can be explored via `read_raw_region`
 (hard-capped at 1024 bytes per call) plus the pinned reference tables.
 
+### What an answer looks like
+
+Real output from a live session against a Platinum US save:
+
+> _"What badges do I have?"_
+>
+> You have **3 badges**: Coal, Forest, and Relic.
+
+> _"Where is my Ponyta stored — which box and slot?"_
+>
+> Ponyta is in **Box 2**, slot **6**.
+
+> _"What are Crobat's IVs, EVs and nature?"_
+>
+> Crobat (Lv 32) — Nature: **Mild** IVs: HP 0 / Atk 5 / Def 2 / Spe 11 / SpA 1 /
+> SpD 14 EVs: HP 52 / Atk 24 / Def 40 / Spe 82 / SpA 89 / SpD 13
+
+📄
+[Full session transcript](https://gist.github.com/EthanThatOneKid/633e584d3555ef5bd119accf70d33c4b)
+— tool-call chain + complete model output.
+
 ## What your client gets
 
 **Three tools** over MCP plus pinnable **reference resources**:
