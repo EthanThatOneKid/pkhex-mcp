@@ -116,12 +116,13 @@ Real output from a live session against a Platinum US save:
 
 ## What your client gets
 
-**Three tools** over MCP plus pinnable **reference resources**:
+**Four tools** over MCP plus pinnable **reference resources**:
 
 | Tool                    | Purpose                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------ |
-| `read_raw_region`       | Raw save bytes as base64 — the exploration primitive (1 KB/call cap)                 |
+| `read_raw_region`       | Raw save bytes as base64 + spaced hex — the exploration primitive (1 KB/call cap)    |
 | `decode_pokemon_record` | Decrypt + decode encrypted Pokémon records (party 236 B / box 136 B), accepts arrays |
+| `decode_pc_box`         | One PC storage box decoded slot-by-slot (1-based numbering)                          |
 | `get_save_info`         | Active partition, file size, capability limits                                       |
 
 **Reference resources** (`pkhex://reference/<name>`): the offset map, a field
