@@ -9,7 +9,7 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "test": "deno test --allow-read --allow-write --allow-run --allow-env",
-    "desktop": "deno desktop --hmr src/main.ts",
+    "desktop": "deno desktop --hmr --allow-read --allow-net --allow-env --allow-run src/main.ts",
     "build:win": "deno desktop --compress=xz --target x86_64-pc-windows-msvc src/main.ts",
     "build:macos": "deno desktop --compress=xz --target aarch64-apple-darwin src/main.ts",
     "build:linux": "deno desktop --compress=xz --target x86_64-unknown-linux-gnu src/main.ts"
