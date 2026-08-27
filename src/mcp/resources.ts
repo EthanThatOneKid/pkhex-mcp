@@ -82,7 +82,7 @@ How to answer open-ended questions about the player's Platinum save efficiently.
 ## Strategy
 
 1. **Scanner first.** Prefer the scanner tools (\`get_badges\`, \`get_bag\`,
-   \`get_dex_summary\`, \`get_pc_box\`, \`get_trainer_card\`, \`get_story_flags\`,
+   \`get_dex_summary\`, \`decode_pc_box\`, \`get_trainer_card\`, \`get_story_flags\`,
    \`get_party_audit\`) — they cost hundreds of tokens instead of thousands.
 2. **Raw reads second.** For anything no scanner covers, use
    \`read_raw_region(offset, length)\`: slot-relative offset, base64 result,
@@ -109,7 +109,10 @@ the reader auto-selects the active half by General-block footer counters
 | Event work array | 0xDAC | u16 per index |
 | Event flags | 0xFEC | flag n at + (n>>3), bit n&7 |
 | Dex block | 0x1328 | caught @+0x04, seen @+0x44; bit = natId-1 |
-| Bag | 0x630 | [u16 id][u16 count] pairs per pouch |
+| Bag | 0x630 | [u16 id][u16 count] per pouch |
+| Mail storage x9 | general 0x4E80 | 9 x 0x38-byte Mail4 records |
+| Daycare slots x2 | general 0x1654 | 2 x 236-byte stored records |
+| Pokérus | party record byte 0x82 (post-decode) | high nibble = strain, low = days remaining |
 
 ## Gotchas
 

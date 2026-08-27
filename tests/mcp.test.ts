@@ -9,6 +9,13 @@ const RAW_FIRST_TOOL_NAMES = [
   "decode_pokemon_record",
   "decode_pc_box",
   "get_save_info",
+  "get_bag",
+  "get_trainer_card",
+  "get_badges",
+  "get_dex_summary",
+  "get_party_audit",
+  "find_in_pc_box",
+  "get_story_flags",
 ];
 
 const RESOURCE_URIS = [
@@ -221,6 +228,180 @@ Deno.test("a fresh client can re-initialize against an already-initialized serve
   const second = await handshake(app);
   const secondCall = await post(app, second, rpc(3, "tools/list"));
   assertEquals(secondCall.status, 200);
+});
+
+Deno.test("get_trainer_card returns identity fields", async () => {
+  const data = makeSave({ money: 135188, badges: 0b00000111 });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(30, "tools/call", {
+        name: "get_trainer_card",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    assertEquals(doc.result.isError ?? false, false);
+    const card = JSON.parse(doc.result.content[0].text);
+    assertEquals(card.playerName, "Ethan");
+    assertEquals(card.money, 135188);
+    assertEquals(card.badgeCount, 3);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+Deno.test("get_badges returns earned badge names", async () => {
+  const data = makeSave({ badges: 0b00000111 });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(31, "tools/call", {
+        name: "get_badges",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    const badges = JSON.parse(doc.result.content[0].text);
+    assertEquals(badges.count, 3);
+    assertEquals(badges.earned.length, 3);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+Deno.test("get_dex_summary returns seen/caught counts", async () => {
+  const data = makeSave({ dexSeen: [1, 25, 100], dexCaught: [1, 25] });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(32, "tools/call", {
+        name: "get_dex_summary",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    const dex = JSON.parse(doc.result.content[0].text);
+    assertEquals(dex.seen, 3);
+    assertEquals(dex.caught, 2);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+Deno.test("get_party_audit returns species/level/nature per slot", async () => {
+  const member = makeEncryptedPartySlot({
+    species: 392,
+    moves: [394, 157, 339, 421],
+    ivs: { hp: 31, atk: 30, def: 29, spe: 28, spa: 27, spd: 26 },
+    level: 32,
+    hpCur: 100,
+    hpMax: 100,
+  });
+  const data = makeSave({ partySlots: [member] });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(33, "tools/call", {
+        name: "get_party_audit",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    const party = JSON.parse(doc.result.content[0].text);
+    assertEquals(Array.isArray(party), true);
+    assertEquals(party.length, 6);
+    assertEquals(party[0].speciesName, "Infernape");
+    assertEquals(party[0].level, 32);
+    // Slots 1-5 should be empty (null species)
+    assertEquals(party[1].speciesName, null);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+Deno.test("get_bag returns pouches with resolved item names", async () => {
+  const data = makeSave({ bagItemsPairs: [[33, 11], [17, 5]] });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(34, "tools/call", {
+        name: "get_bag",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    assertEquals(doc.result.isError ?? false, false);
+    const bag = JSON.parse(doc.result.content[0].text);
+    assertEquals(Array.isArray(bag.pouches), true);
+    // At least the Items pouch should have entries
+    const allItems = bag.pouches.flatMap((p: any) => p.items);
+    assertEquals(allItems.length >= 2, true);
+    // Item 33 = Moomoo Milk
+    const moomoo = allItems.find((i: any) => i.itemId === 33);
+    assertEquals(moomoo !== undefined, true);
+    assertEquals(moomoo.count, 11);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+Deno.test("get_save_info returns resources array", async () => {
+  const data = makeSave();
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(35, "tools/call", {
+        name: "get_save_info",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    const info = JSON.parse(doc.result.content[0].text);
+    assertEquals(Array.isArray(info.resources), true);
+    assertEquals(info.resources.length, 8);
+    const uris = info.resources.map((r: any) => r.uri);
+    assertEquals(uris.includes("pkhex://reference/field-guide"), true);
+    assertEquals(uris.includes("pkhex://reference/items"), true);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
 });
 
 Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async () => {
