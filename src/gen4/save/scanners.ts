@@ -345,7 +345,7 @@ function eventFlagSet(reader: SaveFileReader, flag: number): boolean {
   return ((byte(reader, base + (flag >> 3)) >> (flag & 7)) & 1) === 1;
 }
 
-export function getStoryFlags(
+export function getStoryProgress(
   reader: SaveFileReader,
   indices?: number[],
 ): StoryFlagState[] {
@@ -594,7 +594,7 @@ export function decodePokemonRecord(
 
 // ----------------------------- party audit ------------------------------
 
-export interface PartyAuditMember {
+export interface PartyDetailMember {
   slot: number;
   speciesName: string | null;
   level: number | null;
@@ -609,7 +609,7 @@ export interface PartyAuditMember {
 
 const PARTY_COUNT_OFFSET = 0x9c; // party.partyCount anchor (offsets.ts)
 
-function emptyMember(slot: number): PartyAuditMember {
+function emptyMember(slot: number): PartyDetailMember {
   return {
     slot,
     speciesName: null,
@@ -626,8 +626,8 @@ function emptyMember(slot: number): PartyAuditMember {
  * Slots beyond the live party count report empty (stale post-boxing data is
  * never surfaced), and each member must pass its Add16 checksum or it is
  * reported as a torn row instead of decoded garbage. */
-export function getPartyAudit(reader: SaveFileReader): PartyAuditMember[] {
-  const out: PartyAuditMember[] = [];
+export function getPartyDetail(reader: SaveFileReader): PartyDetailMember[] {
+  const out: PartyDetailMember[] = [];
   const partyCount = Math.min(6, byte(reader, PARTY_COUNT_OFFSET));
   for (let i = 0; i < 6; i++) {
     if (i >= partyCount) {

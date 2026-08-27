@@ -15,9 +15,9 @@ import {
   getBadges,
   getBag,
   getDexSummary,
-  getPartyAudit,
+  getPartyDetail,
   getPcBox,
-  getStoryFlags,
+  getStoryProgress,
   getTrainerCard,
   readRawRegion,
 } from "../gen4/save/scanners.ts";
@@ -154,10 +154,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   server.tool(
-    "get_party_audit",
+    "get_party_detail",
     "Party audit: species, level, nature, IVs, EVs, and moves for each live party member (gated on party count). Torn records (checksum failure) are flagged, never guessed.",
     {},
-    withSave((r) => getPartyAudit(r)),
+    withSave((r) => getPartyDetail(r)),
   );
 
   server.tool(
@@ -170,11 +170,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   server.tool(
-    "get_story_flags",
+    "get_story_progress",
     "Notable story/event flag states (Dialga captured, National Dex obtained, etc.). Pass specific flag indices to check, or omit for the curated notable-flags list.",
     { indices: z.array(z.number().int()).optional() },
     withSave((r, args: { indices?: number[] }) =>
-      getStoryFlags(r, args.indices)
+      getStoryProgress(r, args.indices)
     ),
   );
 

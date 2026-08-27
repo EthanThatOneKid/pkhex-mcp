@@ -49,12 +49,12 @@ function render(summary) {
 
   // Party audit cards
   grid.innerHTML = "";
-  summary.partyAudit.forEach((member, i) => {
+  summary.partyDetail.forEach((member, i) => {
     const card = document.createElement("article");
     card.className = "card";
     card.dataset.slot = String(i);
 
-    const prev = prevState?.partyAudit?.[i] ?? null;
+    const prev = prevState?.partyDetail?.[i] ?? null;
     const flashIf = (changed) => (changed ? "flash num" : "num");
 
     if (member.speciesName === null) {

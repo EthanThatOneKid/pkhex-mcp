@@ -82,8 +82,8 @@ How to answer open-ended questions about the player's Platinum save efficiently.
 ## Strategy
 
 1. **Scanner first.** Prefer the scanner tools (\`get_badges\`, \`get_bag\`,
-   \`get_dex_summary\`, \`decode_pc_box\`, \`get_trainer_card\`, \`get_story_flags\`,
-   \`get_party_audit\`) — they cost hundreds of tokens instead of thousands.
+   \`get_dex_summary\`, \`decode_pc_box\`, \`get_trainer_card\`, \`get_story_progress\`,
+   \`get_party_detail\`) — they cost hundreds of tokens instead of thousands.
 2. **Raw reads second.** For anything no scanner covers, use
    \`read_raw_region(offset, length)\`: slot-relative offset, base64 result,
    hard cap **1024 bytes** per call. Larger requests are REJECTED — paginate

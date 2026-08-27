@@ -9,7 +9,7 @@ import {
   getBadges,
   getBag,
   getDexSummary,
-  getPartyAudit,
+  getPartyDetail,
   getTrainerCard,
 } from "./gen4/save/scanners.ts";
 
@@ -77,7 +77,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
         trainerCard: getTrainerCard(reader),
         badges: getBadges(reader),
         dex: getDexSummary(reader),
-        partyAudit: getPartyAudit(reader),
+        partyDetail: getPartyDetail(reader),
         bag: getBag(reader),
       });
     } catch (e) {

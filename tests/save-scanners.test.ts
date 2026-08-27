@@ -7,9 +7,9 @@ import {
   getBadges,
   getBag,
   getDexSummary,
-  getPartyAudit,
+  getPartyDetail,
   getPcBox,
-  getStoryFlags,
+  getStoryProgress,
   getTrainerCard,
   isSpeciesCaught,
   RAW_REGION_MAX_BYTES,
@@ -168,14 +168,14 @@ Deno.test("dex summary applies the terminator mask and has-caught works", () => 
 
 Deno.test("story flags read notable bits and custom indices", () => {
   const { reader } = buildRichSave();
-  const flags = getStoryFlags(reader);
+  const flags = getStoryProgress(reader);
   const hof = flags.find((f) => f.flag === 2404)!;
   assertEquals(hof.set, true);
   assertEquals(hof.name.includes("Hall of Fame"), true);
   const dialga = flags.find((f) => f.flag === 208)!;
   assertEquals(dialga.set, false);
 
-  const custom = getStoryFlags(reader, [2404, 7]);
+  const custom = getStoryProgress(reader, [2404, 7]);
   assertEquals(custom, [
     { flag: 2404, name: "event flag 2404", set: true },
     { flag: 7, name: "event flag 7", set: false },
@@ -184,7 +184,7 @@ Deno.test("story flags read notable bits and custom indices", () => {
 
 Deno.test("party audit extracts IVs/EVs/nature from encrypted slots", () => {
   const { reader } = buildRichSave();
-  const audit = getPartyAudit(reader);
+  const audit = getPartyDetail(reader);
   const first = audit[0];
   assertEquals(first.speciesName, "Infernape");
   assertEquals(first.level, 32);

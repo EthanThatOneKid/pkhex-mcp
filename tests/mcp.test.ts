@@ -13,9 +13,9 @@ const RAW_FIRST_TOOL_NAMES = [
   "get_trainer_card",
   "get_badges",
   "get_dex_summary",
-  "get_party_audit",
+  "get_party_detail",
   "find_in_pc_box",
-  "get_story_flags",
+  "get_story_progress",
 ];
 
 const RESOURCE_URIS = [
@@ -307,7 +307,7 @@ Deno.test("get_dex_summary returns seen/caught counts", async () => {
   }
 });
 
-Deno.test("get_party_audit returns species/level/nature per slot", async () => {
+Deno.test("get_party_detail returns species/level/nature per slot", async () => {
   const member = makeEncryptedPartySlot({
     species: 392,
     moves: [394, 157, 339, 421],
@@ -326,7 +326,7 @@ Deno.test("get_party_audit returns species/level/nature per slot", async () => {
       app,
       sessionId,
       rpc(33, "tools/call", {
-        name: "get_party_audit",
+        name: "get_party_detail",
         arguments: {},
       }),
     );

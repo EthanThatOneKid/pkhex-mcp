@@ -72,7 +72,7 @@ export function parseStatus(word: number): {
  * - Add16 mismatch, out-of-universe species or level => torn (cache self-heals)
  *
  * v0.2 descope note: this decoder now serves the save-file party audit
- * (`get_party_audit`) and codec round-trip tests only — live wire ingest
+ * (`get_party_detail`) and codec round-trip tests only — live wire ingest
  * was descoped (ADR-0004).
  */
 export function decodePartySlot(
