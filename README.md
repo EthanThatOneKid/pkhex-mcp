@@ -10,7 +10,8 @@ HTTP + stdio), an OpenAPI-documented REST surface, and a local Inspector UI.
 
 - **Architecture**: [docs/adr/](docs/adr/) (ADR-0001 runtime, ADR-0002 BizHawk
   producer [superseded by ADR-0004], ADR-0003 context layer, ADR-0004
-  save-file-only)
+  save-file-only, ADR-0005 no external decode engine, ADR-0006 raw-first
+  surface)
 - **Implementation spec**: [docs/spec/v0.1.md](docs/spec/v0.1.md)
 - **Vocabulary**: [CONTEXT.md](CONTEXT.md)
 
@@ -86,9 +87,10 @@ Paste-ready prompts — the model picks the tools:
 - _"What's in my current PC box — which box number is it?"_
 - _"Where is my Ponyta stored — which box and slot?"_
 - _"Summarize my trainer card, including money."_
-- _"Which notable story flags are set?"_
+- _"How far am I in the story?"_
 - _"What are Crobat's IVs, EVs and nature?"_
 - _"Compare my party members' speeds."_
+- _"Show me everything about my party."_
 
 Anything not covered by a scanner can be explored via `read_raw_region`
 (hard-capped at 1024 bytes per call) plus the pinned reference tables.
@@ -116,23 +118,54 @@ Real output from a live session against a Platinum US save:
 
 ## What your client gets
 
-**Four tools** over MCP plus pinnable **reference resources**:
+**Ten tools** over MCP plus pinnable **reference resources**:
 
 | Tool                    | Purpose                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | `read_raw_region`       | Raw save bytes as base64 + spaced hex — the exploration primitive (1 KB/call cap)    |
 | `decode_pokemon_record` | Decrypt + decode encrypted Pokémon records (party 236 B / box 136 B), accepts arrays |
 | `decode_pc_box`         | One PC storage box decoded slot-by-slot (1-based numbering)                          |
-| `get_save_info`         | Active partition, file size, capability limits                                       |
+| `get_save_info`         | Active partition, file size, capability limits + resource discovery                  |
+
+**Scanner tools** (deterministic answers, no raw-region navigation needed):
+
+| Tool                    | Purpose                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `get_bag`               | All bag pouches with resolved item names and counts                                  |
+| `get_trainer_card`      | Player name, TID, SID, money, badge count, playtime                                 |
+| `get_badges`            | Earned gym badges with resolved names                                                |
+| `get_dex_summary`       | Pokédex seen/caught counts (species capped at 493)                                   |
+| `get_party_detail`      | Species, level, nature, IVs, EVs, moves for each live party member                   |
+| `find_in_pc_box`        | Search all 18 PC boxes by species name or national dex id                            |
+| `get_story_progress`    | Notable story/event flag states (Dialga captured, National Dex obtained, etc.)       |
 
 **Reference resources** (`pkhex://reference/<name>`): the offset map, a field
 guide teaching raw-first navigation (landmarks, worked gotchas), and lookup
 tables for species/moves/items/abilities/natures.
 
-The model explores with `read_raw_region`, consults guides and tables as needed,
-and feeds anything encrypted through `decode_pokemon_record`. This is
-deliberately open-ended: questions don't need a pre-built tool. Answers refresh
-every call — re-save in-game to update the underlying file.
+Scanner tools give deterministic answers in one call. For anything beyond what
+scanners cover, explore with `read_raw_region`, consult guides and tables as
+needed, and feed anything encrypted through `decode_pokemon_record`. Answers
+refresh every call — re-save in-game to update the underlying file.
+
+### Battery results
+
+Measured against a real Platinum US save with `opencode/mimo-v2.5-free`:
+
+| Q | Question | Raw-first (before) | With scanners (after) | Improvement |
+| --- | --- | --- | --- | --- |
+| Q1 | Which badges? | 11 calls ✓ | 2 calls ✓ | **5.5× fewer** |
+| Q2 | Bag items? | ~17 calls ✓ | 2 calls ✓ | **8.5× fewer** |
+| Q3 | Dex seen/caught? | 3 calls ✗ (wrong answer) | 2 calls ✓ | **correct answer** |
+| Q4 | PC box contents? | 2 calls ✓ | 2 calls ✓ | already optimal |
+| Q5 | Money, playtime? | timeout | 2 calls ✓ | **from timeout to 2** |
+| Q6 | Non-battery probes | raw-first fallback | raw-first fallback | offsets added to field guide |
+| Q7 | Party species/nature? | timeout | 2 calls ✓ | **from timeout to 2** |
+| Q8 | Find species in PC? | 19 calls timeout | 2 calls ✓ | **9.5× fewer** |
+
+Each scanner question answers in `get_save_info` + 1 scanner call = **2 tool
+calls**. The ADR-0006 acceptance bar is 3 tool interactions per question — all
+scanner questions now beat it.
 
 Read-only and Platinum-US scoped: no save editing, no games beyond CPUE.
 Authoritative contracts: [docs/spec/v0.1.md](docs/spec/v0.1.md) ·
