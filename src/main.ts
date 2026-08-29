@@ -22,6 +22,8 @@ const flags = parseArgs(Deno.args, {
   default: { stdio: false, port: undefined as string | undefined },
   alias: { h: "help" },
   unknown: (arg) => {
+    // --runtime is injected by `deno desktop`; tolerate it.
+    if (arg === "--runtime") return;
     console.error(`Unknown option: ${arg}\n\n${USAGE}`);
     Deno.exit(1);
   },
