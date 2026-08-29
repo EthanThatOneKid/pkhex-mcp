@@ -13,12 +13,12 @@ import {
   decryptSlot,
   lcgXorRegion,
   unshuffleBlocks,
-} from "../crypto.ts";
-import { parseStatus } from "../deserialize.ts";
-import { ITEMS } from "../data/items.ts";
-import { MOVES } from "../data/moves.ts";
-import { SPECIES } from "../data/species.ts";
-import { natureName } from "../data/natures.ts";
+} from "@/src/gen4/crypto.ts";
+import { parseStatus } from "@/src/gen4/deserialize.ts";
+import { ITEMS } from "@/src/gen4/data/items.ts";
+import { MOVES } from "@/src/gen4/data/moves.ts";
+import { SPECIES } from "@/src/gen4/data/species.ts";
+import { natureName } from "@/src/gen4/data/natures.ts";
 import type { SaveFileReader } from "./reader.ts";
 import {
   badges as badgesOffset,

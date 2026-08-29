@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { SaveFileReader } from "../gen4/save/reader.ts";
+import { SaveFileReader } from "@/src/gen4/save/reader.ts";
 import {
   decodePokemonRecord,
   findInPcBox,
@@ -23,7 +23,7 @@ import {
   getStoryProgress,
   getTrainerCard,
   readRawRegion,
-} from "../gen4/save/scanners.ts";
+} from "@/src/gen4/save/scanners.ts";
 
 export interface ChatToolContext {
   savePath?: string;

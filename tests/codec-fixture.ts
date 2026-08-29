@@ -10,7 +10,7 @@
  *     with the checksum word as seed
  *   +0x88..0xEB battle tail, LCG-XORed with PID as seed
  */
-import type { Stats } from "../src/gen4/schemas.ts";
+import type { Stats } from "@/src/gen4/schemas.ts";
 
 const SHUFFLE = [
   "ABCD",

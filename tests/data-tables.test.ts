@@ -1,8 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { ABILITIES } from "../src/gen4/data/abilities.ts";
-import { ITEMS } from "../src/gen4/data/items.ts";
-import { MOVES } from "../src/gen4/data/moves.ts";
-import { SPECIES } from "../src/gen4/data/species.ts";
+import { ABILITIES } from "@/src/gen4/data/abilities.ts";
+import { ITEMS } from "@/src/gen4/data/items.ts";
+import { MOVES } from "@/src/gen4/data/moves.ts";
+import { SPECIES } from "@/src/gen4/data/species.ts";
 
 /**
  * Regression anchors for generated enrichment tables.

@@ -8,7 +8,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SaveFileReader } from "../gen4/save/reader.ts";
+import { SaveFileReader } from "@/src/gen4/save/reader.ts";
 import {
   decodePcBox,
   decodePokemonRecord,
@@ -24,7 +24,7 @@ import {
   getTrainerCard,
   listNamedRegions,
   readRawRegion,
-} from "../gen4/save/scanners.ts";
+} from "@/src/gen4/save/scanners.ts";
 import { registerReferenceResources } from "./resources.ts";
 
 export interface McpServerOptions {

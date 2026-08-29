@@ -2,8 +2,8 @@
  * Synthetic two-partition Gen IV save builder — field-by-field, no
  * copyrighted data. Shared by save-reader and save-scanner tests.
  */
-import { crc16ccitt, PARTITION_SIZE } from "../../src/gen4/save/reader.ts";
-import { lcgXorRegion, SHUFFLE_TABLE } from "../../src/gen4/crypto.ts";
+import { crc16ccitt, PARTITION_SIZE } from "@/src/gen4/save/reader.ts";
+import { lcgXorRegion, SHUFFLE_TABLE } from "@/src/gen4/crypto.ts";
 
 export const GENERAL_SIZE = 0xcf2c;
 export const FOOTER_REL = 0xcf18; // GENERAL_SIZE - 0x14

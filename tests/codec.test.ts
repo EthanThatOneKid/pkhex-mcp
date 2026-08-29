@@ -1,8 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { decodePartySlot } from "../src/gen4/deserialize.ts";
-import { SPECIES } from "../src/gen4/data/species.ts";
-import { MOVES } from "../src/gen4/data/moves.ts";
-import type { MoveInfo } from "../src/gen4/data/moves.ts";
+import { decodePartySlot } from "@/src/gen4/deserialize.ts";
+import { SPECIES } from "@/src/gen4/data/species.ts";
+import { MOVES } from "@/src/gen4/data/moves.ts";
+import type { MoveInfo } from "@/src/gen4/data/moves.ts";
 import { encodeSlot, type FixtureMember } from "./codec-fixture.ts";
 
 function ppMax(moveId: number, ups: number): number {

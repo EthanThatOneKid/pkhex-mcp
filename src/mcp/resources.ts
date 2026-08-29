@@ -6,11 +6,11 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ABILITIES } from "../gen4/data/abilities.ts";
-import { ITEMS } from "../gen4/data/items.ts";
-import { MOVES } from "../gen4/data/moves.ts";
-import { NATURES } from "../gen4/data/natures.ts";
-import { SPECIES } from "../gen4/data/species.ts";
+import { ABILITIES } from "@/src/gen4/data/abilities.ts";
+import { ITEMS } from "@/src/gen4/data/items.ts";
+import { MOVES } from "@/src/gen4/data/moves.ts";
+import { NATURES } from "@/src/gen4/data/natures.ts";
+import { SPECIES } from "@/src/gen4/data/species.ts";
 
 const MIME = "text/markdown";
 
