@@ -40,11 +40,8 @@ let chatBusy = false;
 const LS_KEY = "pkhex.chat.config";
 
 function loadChatConfig() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
+  catch { return {}; }
 }
 
 function saveChatConfig(cfg) {
@@ -58,7 +55,6 @@ const chatCfgKey = $("chat-cfg-key");
 const chatCfgModel = $("chat-cfg-model");
 const chatSettingsSave = $("chat-settings-save");
 
-// Populate settings from localStorage on load
 const saved = loadChatConfig();
 chatCfgUrl.value = saved.baseUrl || "";
 chatCfgKey.value = saved.apiKey || "";
@@ -75,7 +71,6 @@ chatSettingsSave.addEventListener("click", () => {
   if (chatCfgModel.value.trim()) cfg.model = chatCfgModel.value.trim();
   saveChatConfig(cfg);
   chatSettingsPanel.hidden = true;
-  // Re-check if chat should be enabled
   initChat();
 });
 
@@ -236,9 +231,7 @@ function render(summary) {
   const t = summary.trainerCard;
   $("trainer-name").textContent = t.playerName;
   $("trainer-ids").textContent = `TID ${t.tid} / SID ${t.sid}`;
-  $("trainer-playtime").textContent = `${t.playtime.hours}:${
-    String(t.playtime.minutes).padStart(2, "0")
-  } played · $${t.money}`;
+  $("trainer-playtime").textContent = `${t.playtime.hours}:${String(t.playtime.minutes).padStart(2, "0")} PLAYED · $${t.money}`;
   $("trainer-location").textContent = `🏅 ${t.badgeCount} badges`;
 
   const health = $("health");
@@ -249,7 +242,7 @@ function render(summary) {
   const dexChip = $("dex-chip");
   if (dexChip) {
     dexChip.textContent =
-      `Dex: ${summary.dex.seen} seen / ${summary.dex.caught} caught`;
+      `DEX: ${summary.dex.seen} SEEN / ${summary.dex.caught} CAUGHT`;
   }
 
   // Party audit cards
@@ -271,9 +264,9 @@ function render(summary) {
     }
 
     const moves = member.moves
-      .map((
-        mv,
-      ) => (mv === null ? "<span></span>" : `<span><b>${mv}</b></span>`))
+      .map(
+        (mv) => (mv === null ? "<span></span>" : `<span><b>${mv}</b></span>`)
+      )
       .join("");
     const ivRow = [
       ["HP", member.ivs.hp],
