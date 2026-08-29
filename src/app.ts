@@ -128,18 +128,6 @@ export function createApp(options: AppOptions): OpenAPIHono {
   });
 
   app.post("/chat", async (c) => {
-    if (!chatEnabled(chatConfig)) {
-      return c.json(
-        {
-          error:
-            "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
-            "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
-            "and restart.",
-        },
-        501,
-      );
-    }
-
     try {
       const body = await c.req.json();
       const messages = body.messages as
@@ -149,8 +137,30 @@ export function createApp(options: AppOptions): OpenAPIHono {
         return c.json({ error: "messages array is required and non-empty" }, 400);
       }
 
+      // Merge client-supplied config (from localStorage) with env config.
+      const clientCfg = body.config as
+        | { baseUrl?: string; apiKey?: string; model?: string }
+        | undefined;
+      const effectiveConfig = {
+        apiKey: clientCfg?.apiKey || chatConfig.apiKey,
+        baseUrl: clientCfg?.baseUrl || chatConfig.baseUrl,
+        model: clientCfg?.model || chatConfig.model,
+      };
+
+      if (!chatEnabled(effectiveConfig)) {
+        return c.json(
+          {
+            error:
+              "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
+              "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
+              "and restart.",
+          },
+          501,
+        );
+      }
+
       const result = await runAgent(
-        { config: chatConfig, context: { savePath: options.savePath } },
+        { config: effectiveConfig, context: { savePath: options.savePath } },
         messages,
       );
       return c.json(result);
@@ -161,16 +171,6 @@ export function createApp(options: AppOptions): OpenAPIHono {
 
   // --- SSE streaming variant (POST /chat/stream) ---------------------------
   app.post("/chat/stream", async (c) => {
-    if (!chatEnabled(chatConfig)) {
-      return c.json(
-        {
-          error:
-            "Embedded chat is not configured. Set PKHEX_LLM_API_KEY.",
-        },
-        501,
-      );
-    }
-
     try {
       const body = await c.req.json();
       const messages = body.messages as
@@ -180,8 +180,30 @@ export function createApp(options: AppOptions): OpenAPIHono {
         return c.json({ error: "messages array is required and non-empty" }, 400);
       }
 
+      // Merge client-supplied config (from localStorage) with env config.
+      const clientCfg = body.config as
+        | { baseUrl?: string; apiKey?: string; model?: string }
+        | undefined;
+      const effectiveConfig = {
+        apiKey: clientCfg?.apiKey || chatConfig.apiKey,
+        baseUrl: clientCfg?.baseUrl || chatConfig.baseUrl,
+        model: clientCfg?.model || chatConfig.model,
+      };
+
+      if (!chatEnabled(effectiveConfig)) {
+        return c.json(
+          {
+            error:
+              "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
+              "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
+              "and restart.",
+          },
+          501,
+        );
+      }
+
       const stream = streamAgent(
-        { config: chatConfig, context: { savePath: options.savePath } },
+        { config: effectiveConfig, context: { savePath: options.savePath } },
         messages,
       );
 

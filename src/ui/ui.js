@@ -37,23 +37,70 @@ const chatPanel = $("chat-panel");
 let chatHistory = []; // { role, content }
 let chatBusy = false;
 
+const LS_KEY = "pkhex.chat.config";
+
+function loadChatConfig() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChatConfig(cfg) {
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+}
+
+const chatSettingsBtn = $("chat-settings");
+const chatSettingsPanel = $("chat-settings-panel");
+const chatCfgUrl = $("chat-cfg-url");
+const chatCfgKey = $("chat-cfg-key");
+const chatCfgModel = $("chat-cfg-model");
+const chatSettingsSave = $("chat-settings-save");
+
+// Populate settings from localStorage on load
+const saved = loadChatConfig();
+chatCfgUrl.value = saved.baseUrl || "";
+chatCfgKey.value = saved.apiKey || "";
+chatCfgModel.value = saved.model || "";
+
+chatSettingsBtn.addEventListener("click", () => {
+  chatSettingsPanel.hidden = !chatSettingsPanel.hidden;
+});
+
+chatSettingsSave.addEventListener("click", () => {
+  const cfg = {};
+  if (chatCfgUrl.value.trim()) cfg.baseUrl = chatCfgUrl.value.trim();
+  if (chatCfgKey.value.trim()) cfg.apiKey = chatCfgKey.value.trim();
+  if (chatCfgModel.value.trim()) cfg.model = chatCfgModel.value.trim();
+  saveChatConfig(cfg);
+  chatSettingsPanel.hidden = true;
+  // Re-check if chat should be enabled
+  initChat();
+});
+
 chatToggle.addEventListener("click", () => {
   chatPanel.classList.toggle("collapsed");
   chatToggle.textContent = chatPanel.classList.contains("collapsed") ? "▴" : "▾";
 });
 
 async function initChat() {
+  const hasClientKey = !!loadChatConfig().apiKey;
   try {
     const res = await fetch("/chat/config");
     if (!res.ok) return;
     const cfg = await res.json();
-    if (cfg.enabled) {
+    if (cfg.enabled || hasClientKey) {
       chatFallback.hidden = true;
       chatLive.hidden = false;
       chatInput.focus();
     }
   } catch {
-    /* chat stays in fallback mode */
+    if (hasClientKey) {
+      chatFallback.hidden = true;
+      chatLive.hidden = false;
+      chatInput.focus();
+    }
   }
 }
 
@@ -96,10 +143,13 @@ chatForm.addEventListener("submit", async (e) => {
   let metaParts = [];
 
   try {
+    const cfg = loadChatConfig();
+    const payload = { messages: chatHistory };
+    if (cfg.apiKey || cfg.baseUrl || cfg.model) payload.config = cfg;
     const res = await fetch("/chat/stream", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
