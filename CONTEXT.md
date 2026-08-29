@@ -43,6 +43,8 @@ title. _Avoid_: Sinnoh-era, DPPt
 **Inspector**: The local UI page rendering the decoded save overview. _Avoid_:
 dashboard, viewer
 
-**Chat Harness**: The embedded panel that tells users how to point an external
-MCP client at this server; it hosts no chat itself. _Avoid_: chatbot, assistant,
-embedded chat
+**Chat**: The optional embedded chat panel that lets the player ask open-ended
+questions about their save via a BYO OpenAI-compatible inference endpoint
+(ADR-0007). When no key is configured, the panel degrades to the MCP snippet
+harness for external clients. _Avoid_: chatbot, assistant, embedded chat (old
+anti-goal; superseded by ADR-0007)

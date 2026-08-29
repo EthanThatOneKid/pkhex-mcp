@@ -1,6 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { mountMcpHttp } from "./routes/mcp.ts";
+import { readChatConfig, chatEnabled } from "./chat/config.ts";
+import { runAgent } from "./chat/agent.ts";
 import indexHtml from "./ui/index.html" with { type: "text" };
 import uiJs from "./ui/ui.js" with { type: "text" };
 import stylesCss from "./ui/styles.css" with { type: "text" };
@@ -112,6 +114,50 @@ export function createApp(options: AppOptions): OpenAPIHono {
   );
 
   mountMcpHttp(app, { savePath: options.savePath });
+
+  // --- Embedded chat (ADR-0007, BYO OpenAI-compatible inference) -----------
+  const chatConfig = readChatConfig();
+
+  /** Never leaks the API key — only model + base URL + enabled flag. */
+  app.get("/chat/config", (c) => {
+    return c.json({
+      enabled: chatEnabled(chatConfig),
+      model: chatConfig.model,
+      baseUrl: chatConfig.baseUrl,
+    });
+  });
+
+  app.post("/chat", async (c) => {
+    if (!chatEnabled(chatConfig)) {
+      return c.json(
+        {
+          error:
+            "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
+            "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
+            "and restart.",
+        },
+        501,
+      );
+    }
+
+    try {
+      const body = await c.req.json();
+      const messages = body.messages as
+        | Array<{ role: "user" | "assistant"; content: string }>
+        | undefined;
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return c.json({ error: "messages array is required and non-empty" }, 400);
+      }
+
+      const result = await runAgent(
+        { config: chatConfig, context: { savePath: options.savePath } },
+        messages,
+      );
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
 
   return app;
 }

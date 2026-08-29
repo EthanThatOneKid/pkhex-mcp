@@ -18,11 +18,30 @@
 
     <main class="grid" id="party-grid"></main>
 
-    <aside class="chatharness">
-      <h4>Ask your AI about this run</h4>
-      <p>Point any MCP client at the local server:</p>
-      <code class="snip" id="mcp-snip"></code>
-      <button class="copy" id="copy-snip">Copy snippet</button>
+    <!-- Chat panel: live chat when BYO key is set, MCP snippet fallback otherwise -->
+    <aside class="chat-panel" id="chat-panel">
+      <div class="chat-header">
+        <h4>Chat</h4>
+        <button class="chat-toggle" id="chat-toggle" aria-label="Collapse chat">▾</button>
+      </div>
+
+      <!-- Fallback: shown when chat is disabled -->
+      <div class="chat-fallback" id="chat-fallback">
+        <p>Point any MCP client at the local server:</p>
+        <code class="snip" id="mcp-snip"></code>
+        <button class="copy" id="copy-snip">Copy snippet</button>
+      </div>
+
+      <!-- Live chat: shown when chat is enabled -->
+      <div class="chat-live" id="chat-live" hidden>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-empty">Ask about your save file…</div>
+        </div>
+        <form class="chat-input" id="chat-form">
+          <input type="text" id="chat-input" placeholder="e.g. How many badges do I have?" autocomplete="off" />
+          <button type="submit" id="chat-send">Send</button>
+        </form>
+      </div>
     </aside>
 
     <script src="/ui.js"></script>

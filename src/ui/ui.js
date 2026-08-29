@@ -20,9 +20,99 @@ $("copy-snip").addEventListener("click", () => {
     const btn = $("copy-snip");
     const old = btn.textContent;
     btn.textContent = "Copied!";
-    setTimeout(btn.textContent = old, 1200);
+    setTimeout(() => btn.textContent = old, 1200);
   });
 });
+
+/* --- Embedded chat (ADR-0007, BYO OpenAI-compatible) ------------------- */
+
+const chatMessages = $("chat-messages");
+const chatForm = $("chat-form");
+const chatInput = $("chat-input");
+const chatSend = $("chat-send");
+const chatFallback = $("chat-fallback");
+const chatLive = $("chat-live");
+const chatToggle = $("chat-toggle");
+const chatPanel = $("chat-panel");
+let chatHistory = []; // { role, content }
+let chatBusy = false;
+
+chatToggle.addEventListener("click", () => {
+  chatPanel.classList.toggle("collapsed");
+  chatToggle.textContent = chatPanel.classList.contains("collapsed") ? "▴" : "▾";
+});
+
+async function initChat() {
+  try {
+    const res = await fetch("/chat/config");
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg.enabled) {
+      chatFallback.hidden = true;
+      chatLive.hidden = false;
+      chatInput.focus();
+    }
+  } catch {
+    /* chat stays in fallback mode */
+  }
+}
+
+function appendChatMsg(role, text, meta) {
+  // Remove the empty-state placeholder on first message
+  const empty = chatMessages.querySelector(".chat-empty");
+  if (empty) empty.remove();
+
+  const div = document.createElement("div");
+  div.className = `chat-msg ${role}`;
+  div.textContent = text;
+  if (meta) {
+    const m = document.createElement("div");
+    m.className = "meta";
+    m.textContent = meta;
+    div.appendChild(m);
+  }
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+chatForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = chatInput.value.trim();
+  if (!msg || chatBusy) return;
+
+  chatInput.value = "";
+  chatBusy = true;
+  chatSend.disabled = true;
+
+  chatHistory.push({ role: "user", content: msg });
+  appendChatMsg("user", msg);
+
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: chatHistory }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      appendChatMsg("error", data.error || "Request failed");
+    } else {
+      chatHistory.push({ role: "assistant", content: data.text });
+      const metaParts = [];
+      if (data.toolCalls > 0) metaParts.push(`${data.toolCalls} tool calls`);
+      if (data.steps > 1) metaParts.push(`${data.steps} steps`);
+      appendChatMsg("assistant", data.text, metaParts.length ? metaParts.join(" · ") : null);
+    }
+  } catch (err) {
+    appendChatMsg("error", `Network error: ${err.message}`);
+  } finally {
+    chatBusy = false;
+    chatSend.disabled = false;
+    chatInput.focus();
+  }
+});
+
+initChat();
 
 let prevState = null; // last summary for flash diffing
 
