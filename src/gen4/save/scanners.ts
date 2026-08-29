@@ -24,6 +24,7 @@ import {
   badges as badgesOffset,
   bag as bagOffsets,
   dex as dexOffsets,
+  party as partyOffsets,
   storage as storageOffsets,
   storyFlags as storyFlagsOffsets,
   trainerCard as trainerCardOffsets,
@@ -148,6 +149,42 @@ export function getBag(reader: SaveFileReader): { pouches: BagPouch[] } {
   return { pouches };
 }
 
+// -------------------------------- find item -------------------------------
+
+export interface FindItemHit {
+  pouch: string;
+  itemId: number;
+  itemName: string | null;
+  count: number;
+}
+
+/**
+ * Substring search across all bag pouches. Case-insensitive substring match
+ * on resolved item names; returns every matching { pouch, itemId, itemName,
+ * count } so the model can answer "how many X?" in one call.
+ */
+export function findItem(
+  reader: SaveFileReader,
+  query: string,
+): FindItemHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
+  const hits: FindItemHit[] = [];
+  for (const pouch of bagOffsets.pockets) {
+    const base = bagOffsets.bagBase + pouch.offset;
+    for (let slot = 0; slot < pouch.slotCapacity; slot++) {
+      const id = u16At(reader, base + slot * 4);
+      const count = u16At(reader, base + slot * 4 + 2);
+      if (id === 0 || count === 0) continue;
+      const name = (ITEMS as Record<string, string>)[String(id)] ?? null;
+      if (name && name.toLowerCase().includes(q)) {
+        hits.push({ pouch: pouch.name, itemId: id, itemName: name, count });
+      }
+    }
+  }
+  return hits;
+}
+
 // ---------------------------------- dex ---------------------------------
 
 const DEX_SPECIES_MAX = 493;
@@ -213,11 +250,27 @@ export interface PcSlot {
   speciesName: string | null;
 }
 
+export interface DecodedPcSlot extends PcSlot {
+  level?: number | null;
+  natureName?: string | null;
+  heldItemName?: string | null;
+  moves?: Array<string | null>;
+}
+
 export interface PcBoxView {
   /** 1-based box number, matching the game UI (player-verified). */
   box: number;
   currentBox: boolean;
   slots: PcSlot[];
+}
+
+export interface DecodedPcBoxView {
+  /** 1-based box number, matching the game UI (player-verified). */
+  box: number;
+  currentBox: boolean;
+  /** decoded: true distinguishes this from the species-only PcBoxView. */
+  decoded: true;
+  slots: DecodedPcSlot[];
 }
 
 const EMPTY_RECORD_BYTE = 0xff;
@@ -291,6 +344,86 @@ export function getPcBox(
   return { box: index + 1, currentBox: index === currentIndex, slots };
 }
 
+/**
+ * Rich decode of a PC box: level, nature, held item, and moves per slot.
+ * Reuses the stored-record decrypt path; same deterministic scanner family
+ * as getPcBox but returns the full decrypted header fields.
+ */
+export function decodePcBox(
+  reader: SaveFileReader,
+  boxNumber?: number,
+): DecodedPcBoxView {
+  const storageRel = storageOffsets.blockStartPartitionRelative;
+  const currentIndex = byte(
+    reader,
+    storageRel + storageOffsets.currentBox.offset,
+  );
+  const index = (boxNumber ?? currentIndex + 1) - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= BOX_COUNT) {
+    throw new Error(
+      `box number out of range: ${index + 1} (valid 1..${BOX_COUNT})`,
+    );
+  }
+  const boxStartRel = storageRel + storageOffsets.boxDataStart.offset +
+    index * storageOffsets.boxDataLengthPerBox;
+  const slots: DecodedPcSlot[] = [];
+  for (let s = 0; s < 30; s++) {
+    const absOffset = boxStartRel + s * storageOffsets.boxSlotStride;
+    const record = reader.read(
+      absOffset,
+      storageOffsets.boxSlotStride,
+    );
+    if (isEmptyStored(record)) {
+      slots.push({
+        slot: s,
+        speciesId: null,
+        speciesName: null,
+        level: null,
+        natureName: null,
+        heldItemName: null,
+        moves: [null, null, null, null],
+      });
+      continue;
+    }
+    const image = decryptStoredRecord(record);
+    const pid = (image[0x00]! |
+      (image[0x01]! << 8) |
+      (image[0x02]! << 16) |
+      (image[0x03]! << 24)) >>> 0;
+    const speciesId = image[0x08]! | (image[0x09]! << 8);
+    if (speciesId === 0 || !SPECIES[speciesId]) {
+      slots.push({
+        slot: s,
+        speciesId: null,
+        speciesName: null,
+        level: null,
+        natureName: null,
+        heldItemName: null,
+        moves: [null, null, null, null],
+      });
+      continue;
+    }
+    const heldItemId = image[0x0a]! | (image[0x0b]! << 8);
+    const natureStr = natureName(pid % 25);
+    slots.push({
+      slot: s,
+      speciesId,
+      speciesName: SPECIES[speciesId].name,
+      natureName: natureStr,
+      heldItemName: heldItemId === 0
+        ? null
+        : (ITEMS as Record<string, string>)[String(heldItemId)] ?? null,
+      moves: namedMoves(image),
+    });
+  }
+  return {
+    box: index + 1,
+    currentBox: index === currentIndex,
+    decoded: true as const,
+    slots,
+  };
+}
+
 export interface PcHit {
   box: number;
   slot: number;
@@ -330,6 +463,67 @@ export function resolveSpeciesId(query: string | number): number | null {
     if (info.name.toLowerCase() === q) return Number(id);
   }
   return null;
+}
+
+// --------------------------- PC inventory scan ---------------------------
+
+export interface PcInventoryEntry {
+  box: number;
+  slot: number;
+  speciesId: number;
+  speciesName: string;
+}
+
+export interface PcInventoryPartyEntry {
+  slot: number;
+  speciesId: number;
+  speciesName: string;
+}
+
+export interface PcInventory {
+  party: PcInventoryPartyEntry[];
+  boxes: PcInventoryEntry[];
+}
+
+/**
+ * One-call roster enumeration: every occupied slot across all 18 PC boxes
+ * plus the live party. Reuses the species-only stored-record decrypt path
+ * (storedSpecies) — cheap and deterministic.
+ */
+export function getPcInventory(reader: SaveFileReader): PcInventory {
+  const party: PcInventoryPartyEntry[] = [];
+  const partyCount = Math.min(6, byte(reader, partyOffsets.partyCount.offset));
+  for (let i = 0; i < partyCount; i++) {
+    const base = partyOffsets.firstSlot.offset + i * 236;
+    const record = reader.read(base, 236);
+    if (isAllBytes(record, EMPTY_RECORD_BYTE) || isAllBytes(record, 0)) continue;
+    const image = decryptSlot(record, false);
+    const dv = new DataView(image.buffer);
+    const speciesId = dv.getUint16(0x08, true);
+    if (speciesId === 0 || !SPECIES[speciesId]) continue;
+    party.push({
+      slot: i + 1,
+      speciesId,
+      speciesName: SPECIES[speciesId].name,
+    });
+  }
+
+  const boxes: PcInventoryEntry[] = [];
+  for (let box = 0; box < BOX_COUNT; box++) {
+    const view = getPcBox(reader, box + 1);
+    for (const entry of view.slots) {
+      if (entry.speciesId !== null) {
+        boxes.push({
+          box: box + 1,
+          slot: entry.slot,
+          speciesId: entry.speciesId,
+          speciesName: entry.speciesName!,
+        });
+      }
+    }
+  }
+
+  return { party, boxes };
 }
 
 // ----------------------------- story flags ------------------------------
@@ -376,17 +570,78 @@ export interface RawRegion {
   hex: string;
 }
 
+// ----------------------- named-region resolution -------------------------
+
+/**
+ * Named-region landmark offsets: partition-relative addresses for common
+ * save regions so the model does not need to do offset math.
+ */
+const NAMED_REGIONS: Readonly<Record<string, { offset: number; note: string }>> = {
+  party: {
+    offset: partyOffsets.firstSlot.offset,
+    note: "Party slots x6, stride 236 (0xEC) bytes",
+  },
+  trainer: {
+    offset: trainerCardOffsets.otName.offset,
+    note: "Trainer card: OT name (G4 u16[7]), TID/SID, money",
+  },
+  bag: {
+    offset: bagOffsets.bagBase,
+    note: "Bag: [u16 id][u16 count] pairs across all pouches",
+  },
+  ...Object.fromEntries(
+    Array.from({ length: BOX_COUNT }, (_, i) => [
+      `pc-box-${i + 1}`,
+      {
+        offset:
+          storageOffsets.blockStartPartitionRelative +
+          storageOffsets.boxDataStart.offset +
+          i * storageOffsets.boxDataLengthPerBox,
+        note: `PC box ${i + 1} data: 30 x 136-byte stored records`,
+      },
+    ]),
+  ),
+};
+
+export type NamedRegionKey = keyof typeof NAMED_REGIONS;
+
+export function getNamedRegionOffset(region: string): {
+  offset: number;
+  note: string;
+} | null {
+  const entry = NAMED_REGIONS[region];
+  return entry ?? null;
+}
+
+export function listNamedRegions(): string[] {
+  return Object.keys(NAMED_REGIONS);
+}
+
 /**
  * Raw slot-relative bytes as compact base64 + spaced hex. Rejects (never
  * truncates): non-integer/negative offsets, lengths outside 1..1024, and
  * windows past the end of the active partition.
+ *
+ * When `region` is provided the offset is resolved server-side from the
+ * named-region map; the result offset field reflects the resolved address.
  */
 export function readRawRegion(
   reader: SaveFileReader,
   offset: number,
   length: number,
+  region?: string,
 ): RawRegion {
-  if (!Number.isInteger(offset) || offset < 0) {
+  let resolvedOffset = offset;
+  if (region) {
+    const entry = getNamedRegionOffset(region);
+    if (!entry) {
+      throw new RangeError(
+        `unknown region "${region}"; valid regions: ${listNamedRegions().join(", ")}`,
+      );
+    }
+    resolvedOffset = entry.offset + offset;
+  }
+  if (!Number.isInteger(resolvedOffset) || resolvedOffset < 0) {
     throw new RangeError("offset must be a non-negative integer");
   }
   if (
@@ -396,9 +651,9 @@ export function readRawRegion(
       `length must be 1..${RAW_REGION_MAX_BYTES} bytes per call; paginate for larger ranges`,
     );
   }
-  const bytes = reader.read(offset, length);
+  const bytes = reader.read(resolvedOffset, length);
   return {
-    offset,
+    offset: resolvedOffset,
     length,
     base64: encodeBase64(bytes),
     hex: Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(

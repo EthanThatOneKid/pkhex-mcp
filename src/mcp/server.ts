@@ -10,15 +10,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SaveFileReader } from "../gen4/save/reader.ts";
 import {
+  decodePcBox,
   decodePokemonRecord,
   findInPcBox,
+  findItem,
   getBadges,
   getBag,
   getDexSummary,
   getPartyDetail,
   getPcBox,
+  getPcInventory,
   getStoryProgress,
   getTrainerCard,
+  listNamedRegions,
   readRawRegion,
 } from "../gen4/save/scanners.ts";
 import { registerReferenceResources } from "./resources.ts";
@@ -63,13 +67,17 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 
   server.tool(
     "read_raw_region",
-    "Raw save-file bytes as base64 + spaced hex for exploration beyond the scanners. Slot-relative offset; HARD CAP 1024 bytes per call — larger requests are rejected, paginate instead.",
+    `Raw save-file bytes as base64 + spaced hex for exploration beyond the scanners. Slot-relative offset; HARD CAP 1024 bytes per call — larger requests are rejected, paginate instead. Optional region key ("party", "trainer", "bag", "pc-box-1".."pc-box-18") resolves to the correct partition-relative address server-side; offset is then added on top.`,
     {
       offset: z.number().int().min(0),
       length: z.number().int().min(1).max(1024),
+      region: z.string().optional(),
     },
-    withSave((r, args: { offset: number; length: number }) =>
-      readRawRegion(r, args.offset, args.length)
+    withSave(
+      (
+        r,
+        args: { offset: number; length: number; region?: string },
+      ) => readRawRegion(r, args.offset, args.length, args.region),
     ),
   );
 
@@ -118,9 +126,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 
   server.tool(
     "decode_pc_box",
-    "One PC storage box decoded slot-by-slot (species per 136-byte record). Box numbers are 1-based like the game UI; defaults to the currently-viewed box.",
+    "One PC storage box decoded slot-by-slot with level, nature, held item, and moves per slot. Box numbers are 1-based like the game UI; defaults to the currently-viewed box.",
     { box: z.number().int().min(1).max(18).optional() },
-    withSave((r, args: { box?: number }) => getPcBox(r, args.box)),
+    withSave((r, args: { box?: number }) => decodePcBox(r, args.box)),
   );
 
   // ---- scanner tools ----
@@ -167,15 +175,27 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     withSave((r, args: { query: string | number }) =>
       findInPcBox(r, args.query)
     ),
-  );
-
-  server.tool(
+  );  server.tool(
     "get_story_progress",
     "Notable story/event flag states (Dialga captured, National Dex obtained, etc.). Pass specific flag indices to check, or omit for the curated notable-flags list.",
     { indices: z.array(z.number().int()).optional() },
-    withSave((r, args: { indices?: number[] }) =>
-      getStoryProgress(r, args.indices)
-    ),
+    withSave((r, args: { indices?: number[] }) => getStoryProgress(r, args.indices)),
+  );
+
+  // ---- roster / item scanners ----
+
+  server.tool(
+    "get_pc_inventory",
+    "Full roster across all 18 PC boxes plus the live party. One call answers 'what Pokemon do I have?' — returns every occupied slot with box, slot, speciesId, and speciesName.",
+    {},
+    withSave((r) => getPcInventory(r)),
+  );
+
+  server.tool(
+    "find_item",
+    "Substring search across all bag pouches. Case-insensitive match on resolved item name; returns every match with pouch, itemId, itemName, and count. One call answers 'how many X do I have?'.",
+    { query: z.string().min(1) },
+    withSave((r, args: { query: string }) => findItem(r, args.query)),
   );
 
   return server;

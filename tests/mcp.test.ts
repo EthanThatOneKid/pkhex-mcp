@@ -16,6 +16,8 @@ const RAW_FIRST_TOOL_NAMES = [
   "get_party_detail",
   "find_in_pc_box",
   "get_story_progress",
+  "get_pc_inventory",
+  "find_item",
 ];
 
 const RESOURCE_URIS = [
@@ -470,5 +472,101 @@ Deno.test("stdio mode (--stdio) speaks MCP on stdin/stdout without HTTP", async 
   } catch {
     console.warn("stdio test: first attempt failed, retrying once");
     await attempt();
+  }
+});
+
+// ---- P1: get_pc_inventory MCP tool ----
+
+Deno.test("get_pc_inventory returns party + boxes via MCP", async () => {
+  const member = makeEncryptedPartySlot({
+    species: 392,
+    level: 32,
+    hpCur: 100,
+    hpMax: 100,
+  });
+  const data = makeSave({ partySlots: [member] });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(40, "tools/call", {
+        name: "get_pc_inventory",
+        arguments: {},
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    assertEquals(doc.result.isError ?? false, false);
+    const inv = JSON.parse(doc.result.content[0].text);
+    assertEquals(Array.isArray(inv.party), true);
+    assertEquals(Array.isArray(inv.boxes), true);
+    assertEquals(inv.party.length, 1);
+    assertEquals(inv.party[0].speciesName, "Infernape");
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+// ---- P4: find_item MCP tool ----
+
+Deno.test("find_item searches bag via MCP", async () => {
+  const data = makeSave({ bagItemsPairs: [[79, 2]] });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    const res = await post(
+      app,
+      sessionId,
+      rpc(41, "tools/call", {
+        name: "find_item",
+        arguments: { query: "Repel" },
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    assertEquals(doc.result.isError ?? false, false);
+    const hits = JSON.parse(doc.result.content[0].text);
+    assertEquals(Array.isArray(hits), true);
+    assertEquals(
+      hits.some((h: any) => h.itemId === 79 && h.count === 2),
+      true,
+    );
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
+});
+
+// ---- P3: read_raw_region with named region via MCP ----
+
+Deno.test("read_raw_region accepts region param via MCP", async () => {
+  const data = makeSave({ money: 135188 });
+  const tmp = await Deno.makeTempFile({ suffix: ".sav" });
+  await Deno.writeFile(tmp, data);
+  try {
+    const app = createApp({ savePath: tmp });
+    const sessionId = await handshake(app);
+    // Read TID from the trainer region
+    const res = await post(
+      app,
+      sessionId,
+      rpc(42, "tools/call", {
+        name: "read_raw_region",
+        arguments: { offset: 0x10, length: 4, region: "trainer" },
+      }),
+    );
+    assertEquals(res.status, 200);
+    const doc = await jsonBody(res);
+    assertEquals(doc.result.isError ?? false, false);
+    const region = JSON.parse(doc.result.content[0].text);
+    // Should resolve trainer offset (0x68) + 0x10 = 0x78
+    assertEquals(region.offset, 0x78);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
   }
 });
