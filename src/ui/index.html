@@ -22,7 +22,21 @@
     <aside class="chat-panel" id="chat-panel">
       <div class="chat-header">
         <h4>Chat</h4>
+        <button class="chat-settings" id="chat-settings" aria-label="Chat settings">⚙</button>
         <button class="chat-toggle" id="chat-toggle" aria-label="Collapse chat">▾</button>
+      </div>
+      <div class="chat-settings-panel" id="chat-settings-panel" hidden>
+        <label>Base URL
+          <input type="url" id="chat-cfg-url" placeholder="https://api.openai.com/v1" />
+        </label>
+        <label>API Key
+          <input type="password" id="chat-cfg-key" placeholder="sk-..." />
+        </label>
+        <label>Model
+          <input type="text" id="chat-cfg-model" placeholder="gpt-4o-mini" />
+        </label>
+        <button class="chat-settings-save" id="chat-settings-save">Save</button>
+        <p class="chat-settings-note">API key stored locally in this app only.</p>
       </div>
 
       <!-- Fallback: shown when chat is disabled -->

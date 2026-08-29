@@ -10,7 +10,7 @@
  */
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, stepCountIs, tool } from "ai";
+import { generateText, stepCountIs, streamText, tool } from "ai";
 import type { ChatConfig } from "./config.ts";
 import { chatTools, type ChatToolContext } from "./tools.ts";
 
@@ -89,4 +89,117 @@ export async function runAgent(
     toolCalls,
     steps: result.steps.length,
   };
+}
+
+// ---- SSE streaming variant (POST /chat/stream) --------------------------
+
+function sse(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function buildProvider(config: ChatConfig) {
+  return createOpenAICompatible({
+    name: "pkhex",
+    apiKey: config.apiKey!,
+    baseURL: config.baseUrl,
+  });
+}
+
+function buildToolSet(context: ChatToolContext) {
+  return Object.fromEntries(
+    chatTools.map((t) => [
+      t.name,
+      tool({
+        description: t.description,
+        inputSchema: t.inputSchema,
+        execute: async (args: unknown) => t.execute(context, args),
+      }),
+    ]),
+  );
+}
+
+/**
+ * Stream one user message through the agent, returning an SSE
+ * ReadableStream. Events emitted:
+ *   text       — incremental text delta
+ *   tool-call  — model requested a tool invocation (name + args JSON)
+ *   tool-result — tool execution result summary
+ *   done       — final event with toolCalls and steps counts
+ *   error      — transport or config failure
+ */
+export function streamAgent(
+  { config, context }: AgentOptions,
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+): ReadableStream<Uint8Array> {
+  if (!config.apiKey) {
+    const body = sse(
+      "error",
+      "Embedded chat is not configured. Set PKHEX_LLM_API_KEY.",
+    );
+    return new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(new TextEncoder().encode(body));
+        ctrl.close();
+      },
+    });
+  }
+
+  const encoder = new TextEncoder();
+  let toolCallCount = 0;
+
+  return new ReadableStream({
+    async start(ctrl) {
+      try {
+        const result = streamText({
+          model: buildProvider(config)(config.model),
+          system: SYSTEM_PROMPT,
+          messages,
+          tools: buildToolSet(context),
+          stopWhen: [stepCountIs(12)],
+        });
+
+        for await (const part of result.fullStream) {
+          switch (part.type) {
+            case "text-delta":
+              ctrl.enqueue(encoder.encode(sse("text", part.text)));
+              break;
+            case "tool-call": {
+              toolCallCount++;
+              ctrl.enqueue(
+                encoder.encode(
+                  sse("tool-call", {
+                    toolName: part.toolName,
+                    args: part.input,
+                  }),
+                ),
+              );
+              break;
+            }
+            case "tool-result":
+              ctrl.enqueue(
+                encoder.encode(
+                  sse("tool-result", {
+                    toolName: part.toolName,
+                    result: typeof part.output === "string"
+                      ? part.output.slice(0, 200)
+                      : "[object]",
+                  }),
+                ),
+              );
+              break;
+            // step-finish, finish, etc. — ignored for SSE
+          }
+        }
+
+        const steps = (await result.steps).length;
+        ctrl.enqueue(
+          encoder.encode(sse("done", { toolCalls: toolCallCount, steps })),
+        );
+        ctrl.close();
+      } catch (e) {
+        ctrl.enqueue(encoder.encode(sse("error", String(e))));
+        ctrl.close();
+      }
+    },
+  });
 }

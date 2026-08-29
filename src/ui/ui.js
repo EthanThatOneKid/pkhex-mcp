@@ -37,31 +37,74 @@ const chatPanel = $("chat-panel");
 let chatHistory = []; // { role, content }
 let chatBusy = false;
 
+const LS_KEY = "pkhex.chat.config";
+
+function loadChatConfig() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChatConfig(cfg) {
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+}
+
+const chatSettingsBtn = $("chat-settings");
+const chatSettingsPanel = $("chat-settings-panel");
+const chatCfgUrl = $("chat-cfg-url");
+const chatCfgKey = $("chat-cfg-key");
+const chatCfgModel = $("chat-cfg-model");
+const chatSettingsSave = $("chat-settings-save");
+
+// Populate settings from localStorage on load
+const saved = loadChatConfig();
+chatCfgUrl.value = saved.baseUrl || "";
+chatCfgKey.value = saved.apiKey || "";
+chatCfgModel.value = saved.model || "";
+
+chatSettingsBtn.addEventListener("click", () => {
+  chatSettingsPanel.hidden = !chatSettingsPanel.hidden;
+});
+
+chatSettingsSave.addEventListener("click", () => {
+  const cfg = {};
+  if (chatCfgUrl.value.trim()) cfg.baseUrl = chatCfgUrl.value.trim();
+  if (chatCfgKey.value.trim()) cfg.apiKey = chatCfgKey.value.trim();
+  if (chatCfgModel.value.trim()) cfg.model = chatCfgModel.value.trim();
+  saveChatConfig(cfg);
+  chatSettingsPanel.hidden = true;
+  // Re-check if chat should be enabled
+  initChat();
+});
+
 chatToggle.addEventListener("click", () => {
   chatPanel.classList.toggle("collapsed");
   chatToggle.textContent = chatPanel.classList.contains("collapsed") ? "▴" : "▾";
 });
 
 async function initChat() {
+  const hasClientKey = !!loadChatConfig().apiKey;
   try {
     const res = await fetch("/chat/config");
     if (!res.ok) return;
     const cfg = await res.json();
-    if (cfg.enabled) {
+    if (cfg.enabled || hasClientKey) {
       chatFallback.hidden = true;
       chatLive.hidden = false;
       chatInput.focus();
     }
   } catch {
-    /* chat stays in fallback mode */
+    if (hasClientKey) {
+      chatFallback.hidden = true;
+      chatLive.hidden = false;
+      chatInput.focus();
+    }
   }
 }
 
 function appendChatMsg(role, text, meta) {
-  // Remove the empty-state placeholder on first message
-  const empty = chatMessages.querySelector(".chat-empty");
-  if (empty) empty.remove();
-
   const div = document.createElement("div");
   div.className = `chat-msg ${role}`;
   div.textContent = text;
@@ -87,23 +130,95 @@ chatForm.addEventListener("submit", async (e) => {
   chatHistory.push({ role: "user", content: msg });
   appendChatMsg("user", msg);
 
+  // Remove the empty-state placeholder on first message
+  const empty = chatMessages.querySelector(".chat-empty");
+  if (empty) empty.remove();
+
+  // Create the assistant message div for progressive rendering
+  const assistantDiv = document.createElement("div");
+  assistantDiv.className = "chat-msg assistant";
+  assistantDiv.textContent = "";
+  chatMessages.appendChild(assistantDiv);
+  let fullText = "";
+  let metaParts = [];
+
   try {
-    const res = await fetch("/chat", {
+    const cfg = loadChatConfig();
+    const payload = { messages: chatHistory };
+    if (cfg.apiKey || cfg.baseUrl || cfg.model) payload.config = cfg;
+    const res = await fetch("/chat/stream", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify(payload),
     });
-    const data = await res.json();
+
     if (!res.ok) {
+      const data = await res.json();
+      assistantDiv.remove();
       appendChatMsg("error", data.error || "Request failed");
     } else {
-      chatHistory.push({ role: "assistant", content: data.text });
-      const metaParts = [];
-      if (data.toolCalls > 0) metaParts.push(`${data.toolCalls} tool calls`);
-      if (data.steps > 1) metaParts.push(`${data.steps} steps`);
-      appendChatMsg("assistant", data.text, metaParts.length ? metaParts.join(" · ") : null);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const events = buffer.split("\n\n");
+        buffer = events.pop(); // Keep incomplete chunk
+
+        for (const block of events) {
+          let eventType = "";
+          let eventData = "";
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event: ")) eventType = line.slice(7);
+            else if (line.startsWith("data: ")) eventData = line.slice(6);
+          }
+          if (!eventData) continue;
+
+          try {
+            const parsed = JSON.parse(eventData);
+            switch (eventType) {
+              case "text":
+                fullText += parsed;
+                assistantDiv.textContent = fullText;
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                break;
+              case "tool-call":
+                metaParts.push(`${parsed.toolName}()`);
+                break;
+              case "done":
+                if (parsed.toolCalls > 0)
+                  metaParts.push(`${parsed.toolCalls} tool calls`);
+                if (parsed.steps > 1)
+                  metaParts.push(`${parsed.steps} steps`);
+                break;
+              case "error":
+                assistantDiv.remove();
+                appendChatMsg("error", parsed);
+                break;
+            }
+          } catch {
+            /* skip malformed JSON */
+          }
+        }
+      }
+
+      // Append metadata line if any
+      if (metaParts.length) {
+        const m = document.createElement("div");
+        m.className = "meta";
+        m.textContent = metaParts.join(" · ");
+        assistantDiv.appendChild(m);
+      }
+
+      chatHistory.push({ role: "assistant", content: fullText });
     }
   } catch (err) {
+    assistantDiv.remove();
     appendChatMsg("error", `Network error: ${err.message}`);
   } finally {
     chatBusy = false;

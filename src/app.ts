@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { mountMcpHttp } from "./routes/mcp.ts";
 import { readChatConfig, chatEnabled } from "./chat/config.ts";
-import { runAgent } from "./chat/agent.ts";
+import { runAgent, streamAgent } from "./chat/agent.ts";
 import indexHtml from "./ui/index.html" with { type: "text" };
 import uiJs from "./ui/ui.js" with { type: "text" };
 import stylesCss from "./ui/styles.css" with { type: "text" };
@@ -128,18 +128,6 @@ export function createApp(options: AppOptions): OpenAPIHono {
   });
 
   app.post("/chat", async (c) => {
-    if (!chatEnabled(chatConfig)) {
-      return c.json(
-        {
-          error:
-            "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
-            "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
-            "and restart.",
-        },
-        501,
-      );
-    }
-
     try {
       const body = await c.req.json();
       const messages = body.messages as
@@ -149,11 +137,83 @@ export function createApp(options: AppOptions): OpenAPIHono {
         return c.json({ error: "messages array is required and non-empty" }, 400);
       }
 
+      // Merge client-supplied config (from localStorage) with env config.
+      const clientCfg = body.config as
+        | { baseUrl?: string; apiKey?: string; model?: string }
+        | undefined;
+      const effectiveConfig = {
+        apiKey: clientCfg?.apiKey || chatConfig.apiKey,
+        baseUrl: clientCfg?.baseUrl || chatConfig.baseUrl,
+        model: clientCfg?.model || chatConfig.model,
+      };
+
+      if (!chatEnabled(effectiveConfig)) {
+        return c.json(
+          {
+            error:
+              "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
+              "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
+              "and restart.",
+          },
+          501,
+        );
+      }
+
       const result = await runAgent(
-        { config: chatConfig, context: { savePath: options.savePath } },
+        { config: effectiveConfig, context: { savePath: options.savePath } },
         messages,
       );
       return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- SSE streaming variant (POST /chat/stream) ---------------------------
+  app.post("/chat/stream", async (c) => {
+    try {
+      const body = await c.req.json();
+      const messages = body.messages as
+        | Array<{ role: "user" | "assistant"; content: string }>
+        | undefined;
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return c.json({ error: "messages array is required and non-empty" }, 400);
+      }
+
+      // Merge client-supplied config (from localStorage) with env config.
+      const clientCfg = body.config as
+        | { baseUrl?: string; apiKey?: string; model?: string }
+        | undefined;
+      const effectiveConfig = {
+        apiKey: clientCfg?.apiKey || chatConfig.apiKey,
+        baseUrl: clientCfg?.baseUrl || chatConfig.baseUrl,
+        model: clientCfg?.model || chatConfig.model,
+      };
+
+      if (!chatEnabled(effectiveConfig)) {
+        return c.json(
+          {
+            error:
+              "Embedded chat is not configured. Set PKHEX_LLM_API_KEY " +
+              "(and optionally PKHEX_LLM_BASE_URL / PKHEX_LLM_MODEL) " +
+              "and restart.",
+          },
+          501,
+        );
+      }
+
+      const stream = streamAgent(
+        { config: effectiveConfig, context: { savePath: options.savePath } },
+        messages,
+      );
+
+      return new Response(stream, {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        },
+      });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
