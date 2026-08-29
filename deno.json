@@ -25,6 +25,7 @@
     "@ai-sdk/openai-compatible": "npm:@ai-sdk/openai-compatible@^1",
     "zod": "npm:zod@^4",
     "@std/assert": "jsr:@std/assert@^1",
+    "@std/cli": "jsr:@std/cli@^1",
     "@std/encoding": "jsr:@std/encoding@^1"
   },
   "lint": {
