@@ -83,11 +83,14 @@ How to answer open-ended questions about the player's Platinum save efficiently.
 
 1. **Scanner first.** Prefer the scanner tools (\`get_badges\`, \`get_bag\`,
    \`get_dex_summary\`, \`decode_pc_box\`, \`get_trainer_card\`, \`get_story_progress\`,
-   \`get_party_detail\`) — they cost hundreds of tokens instead of thousands.
+   \`get_party_detail\`, \`get_pc_inventory\`, \`find_item\`) — they cost hundreds
+   of tokens instead of thousands.
 2. **Raw reads second.** For anything no scanner covers, use
    \`read_raw_region(offset, length)\`: slot-relative offset, base64 result,
    hard cap **1024 bytes** per call. Larger requests are REJECTED — paginate
-   with consecutive windows.
+   with consecutive windows. Use the optional \`region\` param (\"party\",
+   \"trainer\", \"bag\", \"pc-box-1\"..\"pc-box-18\") to resolve named regions
+   server-side instead of doing offset math.
 3. **Reference third.** Resolve ids to names via these resources rather than
    guessing: species/moves/items/abilities/natures.
 

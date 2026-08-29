@@ -136,17 +136,21 @@ export function makeSave(opts: SaveOptions = {}): Uint8Array {
   return data;
 }
 
-/** Storage block: current-box byte then 18 boxes x 30 x 136 B records. */
+/**
+ * Storage block: current-box byte then 18 boxes x 30 x 136 B records.
+ * boxNumber is 1-based (matching the game UI and getPcBox convention).
+ */
 export function writeStorageBox(
   data: Uint8Array,
   activeBase: number,
-  boxIndex: number,
+  boxNumber: number,
   records: Map<number, Uint8Array>, // slot -> encrypted 136 B record
-  currentBox = boxIndex,
+  currentBox = boxNumber,
 ): void {
   const storageStart = activeBase + 0xcf2c;
   const dv = new DataView(data.buffer);
-  dv.setUint8(storageStart, currentBox);
+  dv.setUint8(storageStart, currentBox - 1); // currentBox is 0-based in storage byte
+  const boxIndex = boxNumber - 1; // 1-based -> 0-based
   const boxStart = storageStart + 0x04 + boxIndex * 0xff0;
   for (let s = 0; s < 30; s++) {
     const rec = records.get(s);
@@ -228,6 +232,7 @@ export function makeEncryptedStoredRecord(opts: {
   pid?: number;
   species: number;
   item?: number;
+  moves?: [number, number, number, number];
 }): Uint8Array {
   const img = new Uint8Array(136);
   const dv = new DataView(img.buffer);
@@ -235,6 +240,9 @@ export function makeEncryptedStoredRecord(opts: {
   dv.setUint32(0x00, pid, true);
   dv.setUint16(0x08, opts.species, true);
   dv.setUint16(0x0a, opts.item ?? 0, true);
+  if (opts.moves) {
+    (opts.moves).forEach((mv, i) => dv.setUint16(0x28 + i * 2, mv, true));
+  }
   let sum = 0;
   for (let i = 0x08; i < 0x88; i += 2) sum += img[i]! | (img[i + 1]! << 8);
   const checksum = sum & 0xffff;
