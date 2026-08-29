@@ -70,3 +70,47 @@ Deno.test("POST /chat returns 400 for missing messages", async () => {
     Deno.env.delete("PKHEX_LLM_API_KEY");
   }
 });
+
+// --- POST /chat/stream (SSE) tests ----------------------------------------
+
+Deno.test("POST /chat/stream returns 501 when chat is not configured", async () => {
+  const res = await createApp({}).request("/chat/stream", {
+    method: "POST",
+    headers: { ...HOST, "content-type": "application/json" },
+    body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
+  });
+  assertEquals(res.status, 501);
+});
+
+Deno.test("POST /chat/stream returns 400 for empty messages", async () => {
+  Deno.env.set("PKHEX_LLM_API_KEY", "sk-test");
+  try {
+    const res = await createApp({}).request("/chat/stream", {
+      method: "POST",
+      headers: { ...HOST, "content-type": "application/json" },
+      body: JSON.stringify({ messages: [] }),
+    });
+    assertEquals(res.status, 400);
+  } finally {
+    Deno.env.delete("PKHEX_LLM_API_KEY");
+  }
+});
+
+Deno.test("POST /chat/stream returns SSE content-type", async () => {
+  Deno.env.set("PKHEX_LLM_API_KEY", "sk-test-fake-key-that-will-fail-sse-stream");
+  try {
+    const res = await createApp({}).request("/chat/stream", {
+      method: "POST",
+      headers: { ...HOST, "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+    });
+    assertEquals(res.status, 200);
+    const ct = res.headers.get("content-type");
+    assertStringIncludes(ct ?? "", "text/event-stream");
+    // The stream should contain at least one event (error from bad key)
+    const body = await res.text();
+    assertStringIncludes(body, "event: error");
+  } finally {
+    Deno.env.delete("PKHEX_LLM_API_KEY");
+  }
+});

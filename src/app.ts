@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { mountMcpHttp } from "./routes/mcp.ts";
 import { readChatConfig, chatEnabled } from "./chat/config.ts";
-import { runAgent } from "./chat/agent.ts";
+import { runAgent, streamAgent } from "./chat/agent.ts";
 import indexHtml from "./ui/index.html" with { type: "text" };
 import uiJs from "./ui/ui.js" with { type: "text" };
 import stylesCss from "./ui/styles.css" with { type: "text" };
@@ -154,6 +154,44 @@ export function createApp(options: AppOptions): OpenAPIHono {
         messages,
       );
       return c.json(result);
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
+  // --- SSE streaming variant (POST /chat/stream) ---------------------------
+  app.post("/chat/stream", async (c) => {
+    if (!chatEnabled(chatConfig)) {
+      return c.json(
+        {
+          error:
+            "Embedded chat is not configured. Set PKHEX_LLM_API_KEY.",
+        },
+        501,
+      );
+    }
+
+    try {
+      const body = await c.req.json();
+      const messages = body.messages as
+        | Array<{ role: "user" | "assistant"; content: string }>
+        | undefined;
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return c.json({ error: "messages array is required and non-empty" }, 400);
+      }
+
+      const stream = streamAgent(
+        { config: chatConfig, context: { savePath: options.savePath } },
+        messages,
+      );
+
+      return new Response(stream, {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        },
+      });
     } catch (e) {
       return c.json({ error: String(e) }, 500);
     }
