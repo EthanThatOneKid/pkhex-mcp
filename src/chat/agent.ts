@@ -93,7 +93,7 @@ export async function runAgent(
 
 // ---- SSE streaming variant (POST /chat/stream) --------------------------
 
-function sse(event: string, data: string): string {
+function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
@@ -167,10 +167,10 @@ export function streamAgent(
               toolCallCount++;
               ctrl.enqueue(
                 encoder.encode(
-                  sse("tool-call", JSON.stringify({
+                  sse("tool-call", {
                     toolName: part.toolName,
                     args: part.input,
-                  })),
+                  }),
                 ),
               );
               break;
@@ -178,12 +178,12 @@ export function streamAgent(
             case "tool-result":
               ctrl.enqueue(
                 encoder.encode(
-                  sse("tool-result", JSON.stringify({
+                  sse("tool-result", {
                     toolName: part.toolName,
                     result: typeof part.output === "string"
                       ? part.output.slice(0, 200)
                       : "[object]",
-                  })),
+                  }),
                 ),
               );
               break;
@@ -193,7 +193,7 @@ export function streamAgent(
 
         const steps = (await result.steps).length;
         ctrl.enqueue(
-          encoder.encode(sse("done", JSON.stringify({ toolCalls: toolCallCount, steps }))),
+          encoder.encode(sse("done", { toolCalls: toolCallCount, steps })),
         );
         ctrl.close();
       } catch (e) {
