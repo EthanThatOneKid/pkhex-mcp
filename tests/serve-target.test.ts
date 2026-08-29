@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { resolveServeTarget } from "../src/serve-target.ts";
+import { resolveServeTarget } from "@/src/serve-target.ts";
 
 Deno.test("desktop runtime address wins and parses the injected port", () => {
   const target = resolveServeTarget({

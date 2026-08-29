@@ -4,8 +4,8 @@ import {
   crc16ccitt,
   PARTITION_SIZE,
   SaveFileReader,
-} from "../src/gen4/save/reader.ts";
-import { getSectionMap } from "../src/gen4/save/section-map.ts";
+} from "@/src/gen4/save/reader.ts";
+import { getSectionMap } from "@/src/gen4/save/section-map.ts";
 
 const GENERAL_SIZE = 0xcf2c;
 const FOOTER_REL = 0xcf18; // GENERAL_SIZE - 0x14

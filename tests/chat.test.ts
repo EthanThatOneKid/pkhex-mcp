@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { createApp } from "../src/app.ts";
+import { createApp } from "@/src/app.ts";
 
 const HOST = { host: "127.0.0.1:8941" };
 

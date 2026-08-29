@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
-import { MOVES } from "../src/gen4/data/moves.ts";
-import { SaveFileReader } from "../src/gen4/save/reader.ts";
+import { MOVES } from "@/src/gen4/data/moves.ts";
+import { SaveFileReader } from "@/src/gen4/save/reader.ts";
 import {
   decodePcBox,
   decodePokemonRecord,
@@ -19,7 +19,7 @@ import {
   listNamedRegions,
   RAW_REGION_MAX_BYTES,
   readRawRegion,
-} from "../src/gen4/save/scanners.ts";
+} from "@/src/gen4/save/scanners.ts";
 import {
   makeEncryptedPartySlot,
   makeEncryptedStoredRecord,

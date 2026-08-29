@@ -1,6 +1,6 @@
 import { StreamableHTTPTransport } from "@hono/mcp";
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import { createMcpServer } from "../mcp/server.ts";
+import { createMcpServer } from "@/src/mcp/server.ts";
 
 /**
  * Mount the Streamable HTTP transport at /mcp.

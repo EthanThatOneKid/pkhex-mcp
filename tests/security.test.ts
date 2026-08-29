@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { createApp } from "../src/app.ts";
+import { createApp } from "@/src/app.ts";
 
 function makeApp() {
   // No PKHEX_SAVE_PATH: /save/summary answers 503 once security lets a
