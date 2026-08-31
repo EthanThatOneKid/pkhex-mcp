@@ -98,6 +98,24 @@ export function createApp(options: AppOptions): OpenAPIHono {
     return c.body(stylesCss);
   });
 
+  // Vendored Gen 4 Platinum battle sprites (80×80 px PNGs).
+  const spriteDir = `${import.meta.dirname}/ui/sprites/platinum`;
+  app.get("/sprites/:id", async (c) => {
+    const id = c.req.param("id");
+    // Validate: only allow digits, hyphens, and lowercase letters (e.g. 25.png, 493-dark.png).
+    if (!/^[a-z0-9][a-z0-9\-]*\.png$/.test(id)) {
+      return c.json({ error: "invalid sprite id" }, 400);
+    }
+    try {
+      const bytes = await Deno.readFile(`${spriteDir}/${id}`);
+      c.header("content-type", "image/png");
+      c.header("cache-control", "public, max-age=86400");
+      return c.body(bytes);
+    } catch {
+      return c.json({ error: "sprite not found" }, 404);
+    }
+  });
+
   // Interactive API explorer (MCP tool schemas live in resources/list).
   app.get(
     "/doc",

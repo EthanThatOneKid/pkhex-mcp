@@ -291,11 +291,17 @@ function render(summary) {
       } num">${v}</b>${label}EV</div>`
     ).join("");
 
+    const spriteSrc = member.speciesId ? `/sprites/${member.speciesId}.png` : "";
     card.innerHTML = `
-      <div class="top"><span class="name">${member.speciesName}</span><span class="lv num">Lv. ${member.level}</span></div>
-      <div class="meta"><span>${member.natureName} nature</span>${
+      <div class="card-header">
+        ${spriteSrc ? `<img class="sprite" src="${spriteSrc}" alt="${member.speciesName}" width="80" height="80" />` : ""}
+        <div class="card-info">
+          <div class="top"><span class="name">${member.speciesName}</span><span class="lv num">Lv. ${member.level}</span></div>
+          <div class="meta"><span>${member.natureName} nature</span>${
       member.torn ? '<span class="status-chip">TORN</span>' : ""
     }</div>
+        </div>
+      </div>
       <div class="statsrow">${ivRow}</div>
       <div class="statsrow">${evRow}</div>
       <div class="moves">${moves}</div>`;
