@@ -323,33 +323,89 @@ const dropContent = dropZone.querySelector(".drop-zone-content");
 const dropActive = dropZone.querySelector(".drop-zone-active");
 
 let dragCounter = 0;
+let lastFile = null; // for retry
+let retryCount = 0;
+const MAX_RETRIES = 3;
 
-async function uploadFile(file) {
+const uploadError = $("upload-error");
+const uploadErrorText = $("upload-error-text");
+const uploadRetry = $("upload-retry");
+
+function showUploadError(message) {
+  uploadErrorText.textContent = message;
+  uploadError.hidden = false;
+  uploadBtn.disabled = false;
+  uploadBtn.textContent = "Browse Files";
+  uploadBtn.classList.remove("loading");
+}
+
+function hideUploadError() {
+  uploadError.hidden = true;
+  uploadErrorText.textContent = "";
+}
+
+function getFriendlyError(err, status) {
+  if (status === 400) {
+    if (err.includes("too small"))
+      return "File is too small to be a valid save. Please select a different .sav file.";
+    if (err.includes("no file"))
+      return "No file was received. Please try again.";
+    return `Invalid file: ${err}`;
+  }
+  if (status === 500) return "Server error — the file may be corrupted. Please try a different save file.";
+  if (status === 0 || !status) return "Could not connect to the server. Is pkhex-mcp running?";
+  return `Upload failed (HTTP ${status}): ${err}`;
+}
+
+async function uploadFile(file, isRetry = false) {
   if (!file || !file.name.toLowerCase().endsWith(".sav")) {
-    uploadBtn.textContent = "Please select a .sav file";
-    setTimeout(() => { uploadBtn.textContent = "Browse Files"; }, 2000);
+    showUploadError("Please select a .sav file (not "." + (file?.name?.split(".").pop() || "unknown") + ").");
     return;
   }
+  lastFile = file;
+  hideUploadError();
   uploadBtn.disabled = true;
-  uploadBtn.textContent = "Loading…";
+  uploadBtn.textContent = isRetry ? `Retrying (${retryCount}/${MAX_RETRIES})…` : "Loading…";
+  uploadBtn.classList.add("loading");
   try {
     const fd = new FormData();
     fd.append("save", file);
     const res = await fetch("/save/upload", { method: "POST", body: fd });
     if (!res.ok) {
       const err = await res.json();
-      uploadBtn.textContent = err.error || "Upload failed";
-      setTimeout(() => { uploadBtn.textContent = "Browse Files"; uploadBtn.disabled = false; }, 2000);
+      const msg = getFriendlyError(err.error || "Unknown error", res.status);
+      if (res.status >= 500 && retryCount < MAX_RETRIES) {
+        retryCount++;
+        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+        uploadBtn.textContent = `Server error — retrying in ${delay / 1000}s…`;
+        await new Promise((r) => setTimeout(r, delay));
+        return uploadFile(file, true);
+      }
+      retryCount = 0;
+      showUploadError(msg);
       return;
     }
-    // Save loaded — switch to inspector view
+    // Success
+    retryCount = 0;
     uploadScreen.hidden = true;
     startPolling();
   } catch (err) {
-    uploadBtn.textContent = "Upload failed";
-    setTimeout(() => { uploadBtn.textContent = "Browse Files"; uploadBtn.disabled = false; }, 2000);
+    const msg = getFriendlyError(err.message, 0);
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+      uploadBtn.textContent = `Network error — retrying in ${delay / 1000}s…`;
+      await new Promise((r) => setTimeout(r, delay));
+      return uploadFile(file, true);
+    }
+    retryCount = 0;
+    showUploadError(msg);
   }
 }
+
+uploadRetry.addEventListener("click", () => {
+  if (lastFile) uploadFile(lastFile);
+});
 
 uploadInput.addEventListener("change", () => {
   if (uploadInput.files.length) uploadFile(uploadInput.files[0]);

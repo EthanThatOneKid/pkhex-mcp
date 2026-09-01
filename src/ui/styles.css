@@ -377,6 +377,56 @@ body {
   background: #c83030;
 }
 
+#upload-btn.loading {
+  background: var(--secondary);
+  pointer-events: none;
+}
+
+.upload-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  background: #f8d0d0;
+  border: 1px solid var(--accent-red);
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.upload-error-icon {
+  font-size: 24px;
+}
+
+.upload-error-text {
+  font-size: 11px;
+  color: var(--accent-red);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.upload-retry {
+  background: var(--accent-red);
+  color: var(--text-light);
+  border: 2px solid var(--border-dark);
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.upload-retry:hover {
+  background: #c83030;
+}
+
 .upload-note {
   font-size: 9px !important;
   color: var(--dim);

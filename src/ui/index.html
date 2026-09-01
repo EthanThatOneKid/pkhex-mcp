@@ -28,6 +28,11 @@
             <input type="file" id="upload-input" accept=".sav,.SAV" />
             <button type="submit" id="upload-btn" disabled>Browse Files</button>
           </form>
+          <div class="upload-error" id="upload-error" hidden>
+            <span class="upload-error-icon">⚠</span>
+            <span class="upload-error-text" id="upload-error-text"></span>
+            <button type="button" class="upload-retry" id="upload-retry">Try Again</button>
+          </div>
           <p class="upload-note">Your file is stored locally and never leaves this machine.</p>
         </div>
         <div class="drop-zone-active" hidden>
