@@ -10,10 +10,12 @@ const POLL_MS = 2000;
 const $ = (id) => document.getElementById(id);
 const grid = $("party-grid");
 
-const MCP_SNIPPET = `opencode.json ->
-"mcp": { "pkhex": { "type": "remote",
-  "url": "http://127.0.0.1:8941/mcp" } }`;
-$("mcp-snip").textContent = MCP_SNIPPET.replace("opencode.json ->\n", "");
+const MCP_SNIPPET = JSON.stringify(
+  { mcp: { pkhex: { type: "remote", url: "http://127.0.0.1:8941/mcp" } } },
+  null,
+  2,
+);
+$("mcp-snip").textContent = MCP_SNIPPET;
 
 $("copy-snip").addEventListener("click", () => {
   navigator.clipboard?.writeText($("mcp-snip").innerText).then(() => {
