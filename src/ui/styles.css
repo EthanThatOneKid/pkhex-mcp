@@ -286,6 +286,12 @@ body {
   padding: 32px 40px;
   text-align: center;
   max-width: 420px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.upload-box.dragover {
+  border-color: var(--accent-blue);
+  background: #e8f0ff;
 }
 
 .upload-box h2 {
@@ -297,7 +303,7 @@ body {
 }
 
 .upload-box p {
-  margin: 0 0 16px;
+  margin: 0 0 12px;
   font-size: 12px;
   color: var(--dim);
 }
@@ -307,6 +313,35 @@ body {
   border: 1px solid var(--border-dark);
   padding: 1px 4px;
   font-size: 11px;
+}
+
+.drop-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.drop-or {
+  font-size: 10px !important;
+  color: var(--border-light) !important;
+  letter-spacing: 0.04em;
+}
+
+.drop-zone-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.drop-zone-active .drop-icon {
+  font-size: 64px;
+  animation: bounce 0.6s infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
 }
 
 #upload-form {

@@ -18,14 +18,22 @@
 
     <!-- File picker: shown when no save file is configured -->
     <div class="upload-screen" id="upload-screen" hidden>
-      <div class="upload-box">
-        <h2>NO SAVE FILE LOADED</h2>
-        <p>Select your Pokémon Platinum <code>.sav</code> file to get started.</p>
-        <form id="upload-form">
-          <input type="file" id="upload-input" accept=".sav,.SAV" />
-          <button type="submit" id="upload-btn" disabled>Load Save File</button>
-        </form>
-        <p class="upload-note">Your file is stored locally and never leaves this machine.</p>
+      <div class="upload-box" id="drop-zone">
+        <div class="drop-zone-content">
+          <div class="drop-icon">📂</div>
+          <h2>NO SAVE FILE LOADED</h2>
+          <p>Drag & drop your <code>.sav</code> file here</p>
+          <p class="drop-or">— or —</p>
+          <form id="upload-form">
+            <input type="file" id="upload-input" accept=".sav,.SAV" />
+            <button type="submit" id="upload-btn" disabled>Browse Files</button>
+          </form>
+          <p class="upload-note">Your file is stored locally and never leaves this machine.</p>
+        </div>
+        <div class="drop-zone-active" hidden>
+          <div class="drop-icon">⬇</div>
+          <p>Release to load save file</p>
+        </div>
       </div>
     </div>
 

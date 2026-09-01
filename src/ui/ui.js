@@ -318,15 +318,18 @@ const uploadForm = $("upload-form");
 const uploadInput = $("upload-input");
 const uploadBtn = $("upload-btn");
 const health = $("health");
+const dropZone = $("drop-zone");
+const dropContent = dropZone.querySelector(".drop-zone-content");
+const dropActive = dropZone.querySelector(".drop-zone-active");
 
-uploadInput.addEventListener("change", () => {
-  uploadBtn.disabled = !uploadInput.files.length;
-});
+let dragCounter = 0;
 
-uploadForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const file = uploadInput.files[0];
-  if (!file) return;
+async function uploadFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith(".sav")) {
+    uploadBtn.textContent = "Please select a .sav file";
+    setTimeout(() => { uploadBtn.textContent = "Browse Files"; }, 2000);
+    return;
+  }
   uploadBtn.disabled = true;
   uploadBtn.textContent = "Loading…";
   try {
@@ -336,7 +339,7 @@ uploadForm.addEventListener("submit", async (e) => {
     if (!res.ok) {
       const err = await res.json();
       uploadBtn.textContent = err.error || "Upload failed";
-      setTimeout(() => { uploadBtn.textContent = "Load Save File"; uploadBtn.disabled = false; }, 2000);
+      setTimeout(() => { uploadBtn.textContent = "Browse Files"; uploadBtn.disabled = false; }, 2000);
       return;
     }
     // Save loaded — switch to inspector view
@@ -344,8 +347,56 @@ uploadForm.addEventListener("submit", async (e) => {
     startPolling();
   } catch (err) {
     uploadBtn.textContent = "Upload failed";
-    setTimeout(() => { uploadBtn.textContent = "Load Save File"; uploadBtn.disabled = false; }, 2000);
+    setTimeout(() => { uploadBtn.textContent = "Browse Files"; uploadBtn.disabled = false; }, 2000);
   }
+}
+
+uploadInput.addEventListener("change", () => {
+  if (uploadInput.files.length) uploadFile(uploadInput.files[0]);
+});
+
+uploadForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (uploadInput.files.length) uploadFile(uploadInput.files[0]);
+});
+
+/* --- Drag-and-drop -------------------------------------------------------- */
+dropZone.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter++;
+  dropContent.hidden = true;
+  dropActive.hidden = false;
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+dropZone.addEventListener("dragleave", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    dropContent.hidden = false;
+    dropActive.hidden = true;
+    dropZone.classList.remove("dragover");
+  }
+});
+
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter = 0;
+  dropContent.hidden = false;
+  dropActive.hidden = true;
+  dropZone.classList.remove("dragover");
+
+  const files = e.dataTransfer?.files;
+  if (files?.length) uploadFile(files[0]);
 });
 
 async function pollOnce() {
