@@ -313,6 +313,41 @@ function render(summary) {
   prevState = summary;
 }
 
+const uploadScreen = $("upload-screen");
+const uploadForm = $("upload-form");
+const uploadInput = $("upload-input");
+const uploadBtn = $("upload-btn");
+const health = $("health");
+
+uploadInput.addEventListener("change", () => {
+  uploadBtn.disabled = !uploadInput.files.length;
+});
+
+uploadForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = uploadInput.files[0];
+  if (!file) return;
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = "Loading…";
+  try {
+    const fd = new FormData();
+    fd.append("save", file);
+    const res = await fetch("/save/upload", { method: "POST", body: fd });
+    if (!res.ok) {
+      const err = await res.json();
+      uploadBtn.textContent = err.error || "Upload failed";
+      setTimeout(() => { uploadBtn.textContent = "Load Save File"; uploadBtn.disabled = false; }, 2000);
+      return;
+    }
+    // Save loaded — switch to inspector view
+    uploadScreen.hidden = true;
+    startPolling();
+  } catch (err) {
+    uploadBtn.textContent = "Upload failed";
+    setTimeout(() => { uploadBtn.textContent = "Load Save File"; uploadBtn.disabled = false; }, 2000);
+  }
+});
+
 async function pollOnce() {
   try {
     const res = await fetch("/save/summary");
@@ -323,5 +358,28 @@ async function pollOnce() {
   }
 }
 
-pollOnce();
-setInterval(pollOnce, POLL_MS);
+function startPolling() {
+  pollOnce();
+  setInterval(pollOnce, POLL_MS);
+}
+
+// On load: check if a save is already configured.
+async function init() {
+  try {
+    const res = await fetch("/save/status");
+    if (res.ok) {
+      const { configured } = await res.json();
+      if (configured) {
+        uploadScreen.hidden = true;
+        startPolling();
+        return;
+      }
+    }
+  } catch { /* fall through to upload screen */ }
+  // No save configured — show upload screen
+  uploadScreen.hidden = false;
+  health.textContent = "NO SAVE";
+  health.className = "health-disconnected";
+}
+
+init();
