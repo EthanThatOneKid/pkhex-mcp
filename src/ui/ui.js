@@ -359,7 +359,8 @@ function getFriendlyError(err, status) {
 
 async function uploadFile(file, isRetry = false) {
   if (!file || !file.name.toLowerCase().endsWith(".sav")) {
-    showUploadError("Please select a .sav file (not "." + (file?.name?.split(".").pop() || "unknown") + ").");
+    const ext = file?.name?.split(".").pop() || "unknown";
+    showUploadError(`Please select a .sav file (not .${ext}).`);
     return;
   }
   lastFile = file;
