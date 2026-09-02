@@ -124,6 +124,30 @@ body {
   min-height: 140px;
 }
 
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sprite {
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+  border: 1px solid var(--border-dark);
+  background: var(--bg);
+}
+
+.card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .card .top {
   display: flex;
   align-items: baseline;
@@ -240,6 +264,173 @@ body {
   margin: auto;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   UPLOAD SCREEN
+   ========================================================================== */
+.upload-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  padding: 32px;
+}
+
+.upload-box {
+  background: var(--surface);
+  border: 2px solid var(--border-dark);
+  box-shadow:
+    inset 1px 1px 0 var(--border-light),
+    inset -1px -1px 0 var(--primary);
+  padding: 32px 40px;
+  text-align: center;
+  max-width: 420px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.upload-box.dragover {
+  border-color: var(--accent-blue);
+  background: #e8f0ff;
+}
+
+.upload-box h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.upload-box p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.upload-box code {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-dark);
+  padding: 1px 4px;
+  font-size: 11px;
+}
+
+.drop-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.drop-or {
+  font-size: 10px !important;
+  color: var(--border-light) !important;
+  letter-spacing: 0.04em;
+}
+
+.drop-zone-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.drop-zone-active .drop-icon {
+  font-size: 64px;
+  animation: bounce 0.6s infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+#upload-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#upload-input {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#upload-btn {
+  background: var(--accent-red);
+  color: var(--text-light);
+  border: 2px solid var(--border-dark);
+  padding: 8px 24px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+#upload-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#upload-btn:hover:not(:disabled) {
+  background: #c83030;
+}
+
+#upload-btn.loading {
+  background: var(--secondary);
+  pointer-events: none;
+}
+
+.upload-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  background: #f8d0d0;
+  border: 1px solid var(--accent-red);
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.upload-error-icon {
+  font-size: 24px;
+}
+
+.upload-error-text {
+  font-size: 11px;
+  color: var(--accent-red);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.upload-retry {
+  background: var(--accent-red);
+  color: var(--text-light);
+  border: 2px solid var(--border-dark);
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.upload-retry:hover {
+  background: #c83030;
+}
+
+.upload-note {
+  font-size: 9px !important;
+  color: var(--dim);
+  margin-top: 4px !important;
 }
 
 /* ==========================================================================

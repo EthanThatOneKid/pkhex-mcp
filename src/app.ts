@@ -56,7 +56,15 @@ export interface AppOptions {
 const NO_SAVE =
   "save file not configured: set PKHEX_SAVE_PATH to your Platinum .sav copy and restart";
 
+/** Directory for user-persisted save files (~/.pkhex-mcp/). */
+const userDir = `${Deno.env.get("HOME") ?? Deno.env.get("USERPROFILE") ?? "."}/.pkhex-mcp`;
+const persistedSave = `${userDir}/save.sav`;
+
 export function createApp(options: AppOptions): OpenAPIHono {
+  // Mutable save path: env var > persisted upload > undefined.
+  let activeSavePath = options.savePath ?? (() => {
+    try { Deno.statSync(persistedSave); return persistedSave; } catch { return undefined; }
+  })();
   const app = new OpenAPIHono();
 
   app.use("*", async (c, next) => {
@@ -68,12 +76,40 @@ export function createApp(options: AppOptions): OpenAPIHono {
     await next();
   });
 
+  // Save-file status — tells the UI whether a save is loaded.
+  app.get("/save/status", (c) => {
+    return c.json({ configured: !!activeSavePath, path: activeSavePath ?? null });
+  });
+
+  // File upload — accepts a .sav file and activates it.
+  app.post("/save/upload", async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const file = formData.get("save");
+      if (!file || !(file instanceof File)) {
+        return c.json({ error: "no file provided" }, 400);
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Validate it's a plausible save file (at least 64 KB).
+      if (bytes.length < 65536) {
+        return c.json({ error: "file too small to be a valid save" }, 400);
+      }
+      // Persist to ~/.pkhex-mcp/save.sav
+      await Deno.mkdir(userDir, { recursive: true });
+      await Deno.writeFile(persistedSave, bytes);
+      activeSavePath = persistedSave;
+      return c.json({ ok: true, path: persistedSave });
+    } catch (e) {
+      return c.json({ error: String(e) }, 500);
+    }
+  });
+
   // Save-file overview backing the Inspector and any REST client.
   app.get("/save/summary", async (c) => {
-    if (!options.savePath) return c.json({ error: NO_SAVE }, 503);
+    if (!activeSavePath) return c.json({ error: NO_SAVE }, 503);
     try {
       const reader = SaveFileReader.fromBytes(
-        await Deno.readFile(options.savePath),
+        await Deno.readFile(activeSavePath),
       );
       return c.json({
         trainerCard: getTrainerCard(reader),
@@ -98,6 +134,24 @@ export function createApp(options: AppOptions): OpenAPIHono {
     return c.body(stylesCss);
   });
 
+  // Vendored Gen 4 Platinum battle sprites (80×80 px PNGs).
+  const spriteDir = `${import.meta.dirname}/ui/sprites/platinum`;
+  app.get("/sprites/:id", async (c) => {
+    const id = c.req.param("id");
+    // Validate: only allow digits, hyphens, and lowercase letters (e.g. 25.png, 493-dark.png).
+    if (!/^[a-z0-9][a-z0-9\-]*\.png$/.test(id)) {
+      return c.json({ error: "invalid sprite id" }, 400);
+    }
+    try {
+      const bytes = await Deno.readFile(`${spriteDir}/${id}`);
+      c.header("content-type", "image/png");
+      c.header("cache-control", "public, max-age=86400");
+      return c.body(bytes);
+    } catch {
+      return c.json({ error: "sprite not found" }, 404);
+    }
+  });
+
   // Interactive API explorer (MCP tool schemas live in resources/list).
   app.get(
     "/doc",
@@ -113,7 +167,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
     swaggerUI({ url: "/doc", title: "pkhex-mcp API" }),
   );
 
-  mountMcpHttp(app, { savePath: options.savePath });
+  mountMcpHttp(app, { savePath: activeSavePath });
 
   // --- Embedded chat (ADR-0007, BYO OpenAI-compatible inference) -----------
   const chatConfig = readChatConfig();
@@ -160,7 +214,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
       }
 
       const result = await runAgent(
-        { config: effectiveConfig, context: { savePath: options.savePath } },
+        { config: effectiveConfig, context: { savePath: activeSavePath } },
         messages,
       );
       return c.json(result);
@@ -203,7 +257,7 @@ export function createApp(options: AppOptions): OpenAPIHono {
       }
 
       const stream = streamAgent(
-        { config: effectiveConfig, context: { savePath: options.savePath } },
+        { config: effectiveConfig, context: { savePath: activeSavePath } },
         messages,
       );
 

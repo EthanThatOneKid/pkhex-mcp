@@ -10,10 +10,12 @@ const POLL_MS = 2000;
 const $ = (id) => document.getElementById(id);
 const grid = $("party-grid");
 
-const MCP_SNIPPET = `opencode.json ->
-"mcp": { "pkhex": { "type": "remote",
-  "url": "http://127.0.0.1:8941/mcp" } }`;
-$("mcp-snip").textContent = MCP_SNIPPET.replace("opencode.json ->\n", "");
+const MCP_SNIPPET = JSON.stringify(
+  { mcp: { pkhex: { type: "remote", url: "http://127.0.0.1:8941/mcp" } } },
+  null,
+  2,
+);
+$("mcp-snip").textContent = MCP_SNIPPET;
 
 $("copy-snip").addEventListener("click", () => {
   navigator.clipboard?.writeText($("mcp-snip").innerText).then(() => {
@@ -291,11 +293,17 @@ function render(summary) {
       } num">${v}</b>${label}EV</div>`
     ).join("");
 
+    const spriteSrc = member.speciesId ? `/sprites/${member.speciesId}.png` : "";
     card.innerHTML = `
-      <div class="top"><span class="name">${member.speciesName}</span><span class="lv num">Lv. ${member.level}</span></div>
-      <div class="meta"><span>${member.natureName} nature</span>${
+      <div class="card-header">
+        ${spriteSrc ? `<img class="sprite" src="${spriteSrc}" alt="${member.speciesName}" width="80" height="80" />` : ""}
+        <div class="card-info">
+          <div class="top"><span class="name">${member.speciesName}</span><span class="lv num">Lv. ${member.level}</span></div>
+          <div class="meta"><span>${member.natureName} nature</span>${
       member.torn ? '<span class="status-chip">TORN</span>' : ""
     }</div>
+        </div>
+      </div>
       <div class="statsrow">${ivRow}</div>
       <div class="statsrow">${evRow}</div>
       <div class="moves">${moves}</div>`;
@@ -304,6 +312,149 @@ function render(summary) {
 
   prevState = summary;
 }
+
+const uploadScreen = $("upload-screen");
+const uploadForm = $("upload-form");
+const uploadInput = $("upload-input");
+const uploadBtn = $("upload-btn");
+const health = $("health");
+const dropZone = $("drop-zone");
+const dropContent = dropZone.querySelector(".drop-zone-content");
+const dropActive = dropZone.querySelector(".drop-zone-active");
+
+let dragCounter = 0;
+let lastFile = null; // for retry
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
+const uploadError = $("upload-error");
+const uploadErrorText = $("upload-error-text");
+const uploadRetry = $("upload-retry");
+
+function showUploadError(message) {
+  uploadErrorText.textContent = message;
+  uploadError.hidden = false;
+  uploadBtn.disabled = false;
+  uploadBtn.textContent = "Browse Files";
+  uploadBtn.classList.remove("loading");
+}
+
+function hideUploadError() {
+  uploadError.hidden = true;
+  uploadErrorText.textContent = "";
+}
+
+function getFriendlyError(err, status) {
+  if (status === 400) {
+    if (err.includes("too small"))
+      return "File is too small to be a valid save. Please select a different .sav file.";
+    if (err.includes("no file"))
+      return "No file was received. Please try again.";
+    return `Invalid file: ${err}`;
+  }
+  if (status === 500) return "Server error — the file may be corrupted. Please try a different save file.";
+  if (status === 0 || !status) return "Could not connect to the server. Is pkhex-mcp running?";
+  return `Upload failed (HTTP ${status}): ${err}`;
+}
+
+async function uploadFile(file, isRetry = false) {
+  if (!file || !file.name.toLowerCase().endsWith(".sav")) {
+    const ext = file?.name?.split(".").pop() || "unknown";
+    showUploadError(`Please select a .sav file (not .${ext}).`);
+    return;
+  }
+  lastFile = file;
+  hideUploadError();
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = isRetry ? `Retrying (${retryCount}/${MAX_RETRIES})…` : "Loading…";
+  uploadBtn.classList.add("loading");
+  try {
+    const fd = new FormData();
+    fd.append("save", file);
+    const res = await fetch("/save/upload", { method: "POST", body: fd });
+    if (!res.ok) {
+      const err = await res.json();
+      const msg = getFriendlyError(err.error || "Unknown error", res.status);
+      if (res.status >= 500 && retryCount < MAX_RETRIES) {
+        retryCount++;
+        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+        uploadBtn.textContent = `Server error — retrying in ${delay / 1000}s…`;
+        await new Promise((r) => setTimeout(r, delay));
+        return uploadFile(file, true);
+      }
+      retryCount = 0;
+      showUploadError(msg);
+      return;
+    }
+    // Success
+    retryCount = 0;
+    uploadScreen.hidden = true;
+    startPolling();
+  } catch (err) {
+    const msg = getFriendlyError(err.message, 0);
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 4000);
+      uploadBtn.textContent = `Network error — retrying in ${delay / 1000}s…`;
+      await new Promise((r) => setTimeout(r, delay));
+      return uploadFile(file, true);
+    }
+    retryCount = 0;
+    showUploadError(msg);
+  }
+}
+
+uploadRetry.addEventListener("click", () => {
+  if (lastFile) uploadFile(lastFile);
+});
+
+uploadInput.addEventListener("change", () => {
+  if (uploadInput.files.length) uploadFile(uploadInput.files[0]);
+});
+
+uploadForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (uploadInput.files.length) uploadFile(uploadInput.files[0]);
+});
+
+/* --- Drag-and-drop -------------------------------------------------------- */
+dropZone.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter++;
+  dropContent.hidden = true;
+  dropActive.hidden = false;
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+dropZone.addEventListener("dragleave", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
+    dropContent.hidden = false;
+    dropActive.hidden = true;
+    dropZone.classList.remove("dragover");
+  }
+});
+
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter = 0;
+  dropContent.hidden = false;
+  dropActive.hidden = true;
+  dropZone.classList.remove("dragover");
+
+  const files = e.dataTransfer?.files;
+  if (files?.length) uploadFile(files[0]);
+});
 
 async function pollOnce() {
   try {
@@ -315,5 +466,28 @@ async function pollOnce() {
   }
 }
 
-pollOnce();
-setInterval(pollOnce, POLL_MS);
+function startPolling() {
+  pollOnce();
+  setInterval(pollOnce, POLL_MS);
+}
+
+// On load: check if a save is already configured.
+async function init() {
+  try {
+    const res = await fetch("/save/status");
+    if (res.ok) {
+      const { configured } = await res.json();
+      if (configured) {
+        uploadScreen.hidden = true;
+        startPolling();
+        return;
+      }
+    }
+  } catch { /* fall through to upload screen */ }
+  // No save configured — show upload screen
+  uploadScreen.hidden = false;
+  health.textContent = "NO SAVE";
+  health.className = "health-disconnected";
+}
+
+init();
