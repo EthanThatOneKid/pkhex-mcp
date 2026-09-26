@@ -1,4 +1,4 @@
-﻿/**
+/**
  * One-shot enrichment-table generator (spec section 6).
  * Pulls PokeAPI's bulk CSVs (few requests, deterministic) and writes
  * checked-in modules under src/gen4/data/.
